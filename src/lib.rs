@@ -6,11 +6,11 @@ extern crate lazy_static;
 extern crate chrono;
 use chrono::offset::LocalResult;
 use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc, Weekday};
-use pidgin::{Match, Matcher};
+use pidgin::{Grammar, Match, Matcher};
 use regex::Regex;
 
 lazy_static! {
-    static ref GRAMMAR: Matcher = grammar!{
+    static ref GRAMMAR: Grammar = grammar!{
         (?ibBw)
 
         TOP -> r(r"\A") <something> r(r"\z")
@@ -21,7 +21,7 @@ lazy_static! {
         one_moment => <at_moment>
         two_moments -> <at_moment> <to> <at_moment>
         to => [["to", "through", "until", "up to", "thru", "till"]] | r("-+")
-        at_moment -> <at_time>? <moment> <at_time>? | <time>
+        at_moment -> <at_time_on>? <moment> <at_time>? | <time>
         moment => <specific> | <relative>
         specific => <adverb> | <date_with_year>
         relative => ("bar")
@@ -32,6 +32,7 @@ lazy_static! {
         yesterday => ("yesterday")
         date_with_year => <n_date> | <a_date>
         at_time -> ("at") <time>
+        at_time_on -> ("at")? <time> ("on")
         time -> <hour_12> <am_pm>? | <hour_24>
         hour_24 => <h24>
         hour_24 => <h24> (":") <minute>
@@ -39,8 +40,8 @@ lazy_static! {
         hour_12 => <h12>
         hour_12 => <h12> (":") <minute>
         hour_12 => <h12> (":") <minute> (":") <second>
-        minute => [ (0..60).into_iter().map(|i| format!("'{:02}", i)).collect::<Vec<_>>() ]
-        second => [ (0..60).into_iter().map(|i| format!("'{:02}", i)).collect::<Vec<_>>() ]
+        minute => [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
+        second => [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
         am_pm => (?-i) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
         h12 => [(1..=12).into_iter().collect::<Vec<_>>()]
         h24 => [(1..=24).into_iter().collect::<Vec<_>>()]
@@ -103,7 +104,10 @@ lazy_static! {
                      .flat_map(|w| vec![w.to_string(), w[0..3].to_string()])
                      .collect::<Vec<_>>()
             ]
-    }.matcher().unwrap();
+    };
+}
+lazy_static! {
+    static ref MATCHER: Matcher = GRAMMAR.matcher().unwrap();
 }
 
 pub fn parse(
@@ -111,9 +115,7 @@ pub fn parse(
     now: Option<&DateTime<Utc>>,
     period: Option<Period>,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
-    let parse = GRAMMAR.parse(phrase);
-    // println!("{:?}", GRAMMAR.rx);
-    // println!("what I got: {:?}", parse);
+    let parse = MATCHER.parse(phrase);
     if parse.is_none() {
         return Err(format!(
             "could not parse \"{}\" as a time expression",
@@ -139,16 +141,16 @@ pub fn parse(
         Period::Minute
     };
     if let Some(moment) = parse.name("one_moment") {
-        if let Some(specific) = moment.name("specific") {
-            return specific_moment(specific, &now, &period);
+        if moment.has("specific") {
+            return specific_moment(moment, &now, &period);
         }
-        if let Some(relative) = moment.name("relative") {
-            return Ok(relative_moment(relative, &now, &now, true));
+        if moment.has("relative") {
+            return Ok(relative_moment(moment, &now, &now, true));
         }
         unreachable!();
     }
     if let Some(two_moments) = parse.name("two_moments") {
-        let moments = two_moments.all_names("moment");
+        let moments = two_moments.all_names("at_moment");
         let first = moments[0];
         let last = moments[1];
         if first.has("specific") {
@@ -192,24 +194,57 @@ pub fn parse(
     unreachable!();
 }
 
+// add time to a date
+fn moment_and_time(
+    m: DateTime<Utc>,
+    default_period: &Period,
+    daytime: Option<&Match>,
+) -> (DateTime<Utc>, DateTime<Utc>) {
+    if let Some(daytime) = daytime {
+        let (hour, minute, second) = time(daytime);
+        let period = if second.is_some() {
+            Period::Second
+        } else if minute.is_some() {
+            Period::Minute
+        } else {
+            Period::Hour
+        };
+        let m = m
+            .with_hour(hour)
+            .unwrap()
+            .with_minute(minute.unwrap_or(0))
+            .unwrap()
+            .with_second(second.unwrap_or(0))
+            .unwrap();
+        moment_to_period(m, &period)
+    } else {
+        moment_to_period(m, default_period)
+    }
+}
+
 fn specific_moment(
     m: &Match,
     now: &DateTime<Utc>,
     period: &Period,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
     let now = now.clone();
+    let mut times = m.all_names("time");
+    if times.len() > 1 {
+        return Err(format!("more than one daytime specified in {}", m.as_str()));
+    }
+    let time = times.pop();
     if let Some(adverb) = m.name("adverb") {
         if adverb.has("now") {
-            return Ok(moment_to_period(now, &period));
+            return Ok(moment_and_time(now, period, time));
         }
         if adverb.has("today") {
-            return Ok(moment_to_period(now, &Period::Day));
+            return Ok(moment_and_time(now, &Period::Day, time));
         }
         if adverb.has("tomorrow") {
-            return Ok(moment_to_period(now + Duration::days(1), &Period::Day));
+            return Ok(moment_and_time(now + Duration::days(1), &Period::Day, time));
         }
         if adverb.has("yesterday") {
-            return Ok(moment_to_period(now - Duration::days(1), &Period::Day));
+            return Ok(moment_and_time(now - Duration::days(1), &Period::Day, time));
         }
         unreachable!();
     }
@@ -226,7 +261,7 @@ fn specific_moment(
                 )),
                 LocalResult::Single(d1) => {
                     let d1 = d1.and_hms(0, 0, 0);
-                    Ok((d1, d1 + Duration::days(1)))
+                    Ok(moment_and_time(d1, &Period::Day, time))
                 }
                 LocalResult::Ambiguous(_, _) => Err(format!(
                     "cannot construct unambiguous UTC date with year {}, month {}, and day {}",
@@ -249,7 +284,7 @@ fn specific_moment(
                         let wd = weekday(wd.as_str());
                         if wd == d1.weekday() {
                             let d1 = d1.and_hms(0, 0, 0);
-                            Ok((d1, d1 + Duration::days(1)))
+                            Ok(moment_and_time(d1, &Period::Day, time))
                         } else {
                             Err(format!(
                                 "the weekday of year {}, month {}, day {} is not {}",
@@ -261,7 +296,7 @@ fn specific_moment(
                         }
                     } else {
                         let d1 = d1.and_hms(0, 0, 0);
-                        Ok((d1, d1 + Duration::days(1)))
+                        Ok(moment_and_time(d1, &Period::Day, time))
                     }
                 }
                 LocalResult::Ambiguous(_, _) => Err(format!(
@@ -296,6 +331,36 @@ fn a_month(m: &Match) -> u32 {
     }
 }
 
+// extract hour, minute, and second from time match
+fn time(m: &Match) -> (u32, Option<u32>, Option<u32>) {
+    let hour = if let Some(hour_24) = m.name("hour_24") {
+        s_to_n(hour_24.name("h24").unwrap().as_str())
+    } else if let Some(hour_12) = m.name("hour_12") {
+        let hour = s_to_n(hour_12.name("h12").unwrap().as_str());
+        if let Some(am_pm) = m.name("am_pm") {
+            match am_pm.as_str().chars().nth(0).expect("empty string") {
+                'a' | 'A' => hour,
+                _ => hour + 12,
+            }
+        } else {
+            hour
+        }
+    } else {
+        unreachable!()
+    };
+    if let Some(minute) = m.name("minute") {
+        let minute = s_to_n(minute.as_str());
+        if let Some(second) = m.name("second") {
+            let second = s_to_n(second.as_str());
+            (hour, Some(minute), Some(second))
+        } else {
+            (hour, Some(minute), None)
+        }
+    } else {
+        (hour, None, None)
+    }
+}
+
 fn n_month(m: &Match) -> u32 {
     lazy_static! {
         static ref MONTH: Regex = Regex::new(r"\A0?(\d{1,2})\z").unwrap();
@@ -322,6 +387,13 @@ fn year(m: &Match, now: &DateTime<Utc>) -> i32 {
     } else {
         year.parse::<i32>().unwrap()
     }
+}
+
+fn s_to_n(s: &str) -> u32 {
+    lazy_static! {
+        static ref S_TO_N: Regex = Regex::new(r"\A[\D0]*(\d+)\z").unwrap();
+    }
+    S_TO_N.captures(s).unwrap()[1].parse::<u32>().unwrap()
 }
 
 fn n_day(m: &Match) -> u32 {

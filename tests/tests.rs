@@ -65,18 +65,87 @@ fn today() {
 }
 
 #[test]
-fn ymd_5_6_69() {
-    let then = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+fn day_5_6_69_at_3_30_pm() {
+    let then = Utc.ymd(1969, 5, 6).and_hms(15, 30, 0);
     for phrase in [
-        "5-6-69", "5/6/69", "5.6.69", "5/6/1969", "5-6-1969", "5.6.1969", "69-5-6", "69/5/6",
-        "69.5.6", "1969/5/6", "1969-5-6", "1969.5.6", "5-6-'69", "5/6/'69", "5.6.'69", "'69-5-6",
-        "'69/5/6", "'69.5.6",
+        "at 3:30 PM on 5-6-69",
+        "3:30 p.m. on 5-6-69",
+        "at 15:30 on 5-6-69",
+        "15:30 on 5-6-69",
     ]
         .iter()
     {
         let (start, end) = parse(phrase, None, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::days(1), end);
+        assert_eq!(then + Duration::minutes(1), end);
+    }
+}
+
+#[test]
+fn day_5_6_69_at_3_pm() {
+    let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
+    for phrase in [
+        "at 3 PM on 5-6-69",
+        "3 p.m. on 5-6-69",
+        "at 15 on 5-6-69",
+        "15 on 5-6-69",
+    ]
+        .iter()
+    {
+        let (start, end) = parse(phrase, None, None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::hours(1), end);
+    }
+}
+
+#[test]
+fn day_5_6_69_at_3_30_00_pm() {
+    let then = Utc.ymd(1969, 5, 6).and_hms(15, 30, 0);
+    for phrase in [
+        "at 3:30:00 PM on 5-6-69",
+        "3:30:00 p.m. on 5-6-69",
+        "at 15:30:00 on 5-6-69",
+        "15:30:00 on 5-6-69",
+    ]
+        .iter()
+    {
+        let (start, end) = parse(phrase, None, None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::seconds(1), end);
+    }
+}
+
+#[test]
+fn day_5_6_69_at_3_30_01_pm() {
+    let then = Utc.ymd(1969, 5, 6).and_hms(15, 30, 1);
+    for phrase in [
+        "at 3:30:01 PM on 5-6-69",
+        "3:30:01 p.m. on 5-6-69",
+        "at 15:30:01 on 5-6-69",
+        "15:30:01 on 5-6-69",
+    ]
+        .iter()
+    {
+        let (start, end) = parse(phrase, None, None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::seconds(1), end);
+    }
+}
+
+#[test]
+fn day_5_6_69_at_3_30_01_am() {
+    let then = Utc.ymd(1969, 5, 6).and_hms(3, 30, 1);
+    for phrase in [
+        "at 3:30:01 AM on 5-6-69",
+        "3:30:01 a.m. on 5-6-69",
+        "at 3:30:01 on 5-6-69",
+        "3:30:01 on 5-6-69",
+    ]
+        .iter()
+    {
+        let (start, end) = parse(phrase, None, None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::seconds(1), end);
     }
 }
 
