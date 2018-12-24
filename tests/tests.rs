@@ -150,6 +150,50 @@ fn day_5_6_69_at_3_30_01_am() {
 }
 
 #[test]
+fn at_3_pm() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(16, 0, 0);
+    let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
+    for phrase in ["3 PM", "3 pm", "15"].iter() {
+        let (start, end) = parse(phrase, Some(&now), None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::hours(1), end);
+    }
+}
+
+#[test]
+fn at_3_00_pm() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(16, 0, 0);
+    let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
+    for phrase in ["3:00 PM", "3:00 pm", "15:00"].iter() {
+        let (start, end) = parse(phrase, Some(&now), None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::minutes(1), end);
+    }
+}
+
+#[test]
+fn at_3_00_00_pm() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(16, 0, 0);
+    let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
+    for phrase in ["3:00:00 PM", "3:00:00 pm", "15:00:00"].iter() {
+        let (start, end) = parse(phrase, Some(&now), None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::seconds(1), end);
+    }
+}
+
+#[test]
+fn at_3_pm_yesterday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(14, 0, 0);
+    let then = Utc.ymd(1969, 5, 5).and_hms(15, 0, 0);
+    for phrase in ["3 PM", "3 pm", "15"].iter() {
+        let (start, end) = parse(phrase, Some(&now), None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::hours(1), end);
+    }
+}
+
+#[test]
 fn alphabetic_5_6_69() {
     let then = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
     for phrase in [

@@ -25,11 +25,7 @@ lazy_static! {
         moment => <specific> | <relative>
         specific => <adverb> | <date_with_year>
         relative => ("bar")
-        adverb => <now> | <today> | <tomorrow> | <yesterday>
-        now => ("now")
-        today => ("today")
-        tomorrow => ("tomorrow")
-        yesterday => ("yesterday")
+        adverb => [["now", "today", "tomorrow", "yesterday"]]
         date_with_year => <n_date> | <a_date>
         at_time -> ("at") <time>
         at_time_on -> ("at")? <time> ("on")
@@ -144,15 +140,14 @@ pub fn parse(
         if moment.has("specific") {
             return specific_moment(moment, &now, &period);
         }
-        if moment.has("relative") {
+        if moment.has("relative") || moment.has("time") {
             return Ok(relative_moment(moment, &now, &now, true));
         }
         unreachable!();
     }
     if let Some(two_moments) = parse.name("two_moments") {
-        let moments = two_moments.all_names("at_moment");
-        let first = moments[0];
-        let last = moments[1];
+        let first = &two_moments.children().unwrap()[0];
+        let last = &two_moments.children().unwrap()[2];
         if first.has("specific") {
             if last.has("specific") {
                 return match specific_moment(first, &now, &period) {
@@ -222,6 +217,37 @@ fn moment_and_time(
     }
 }
 
+fn relative_moment(
+    m: &Match,
+    now: &DateTime<Utc>,
+    other_time: &DateTime<Utc>,
+    before: bool,
+) -> (DateTime<Utc>, DateTime<Utc>) {
+    if !m.has("moment") {
+        // necessarily just time
+        if let Some(t) = m.name("time") {
+            let (hour, minute, second) = time(t);
+            let period = if second.is_some() {
+                Period::Second
+            } else if minute.is_some() {
+                Period::Minute
+            } else {
+                Period::Hour
+            };
+            let mut t = other_time.with_hour(hour).unwrap().with_minute(minute.unwrap_or(0)).unwrap().with_second(second.unwrap_or(0)).unwrap();
+            if before && t > *other_time {
+                t = t - Duration::days(1);
+            } else if !before && t < *other_time {
+                t = t + Duration::days(1);
+            }
+            return moment_to_period(t, &period)
+        } else {
+            unreachable!();
+        }
+    }
+    unimplemented!();
+}
+
 fn specific_moment(
     m: &Match,
     now: &DateTime<Utc>,
@@ -234,19 +260,20 @@ fn specific_moment(
     }
     let time = times.pop();
     if let Some(adverb) = m.name("adverb") {
-        if adverb.has("now") {
-            return Ok(moment_and_time(now, period, time));
+        return match adverb.as_str().chars().nth(0).expect("empty string") {
+            // now
+            'n' | 'N' => Ok(moment_and_time(now, period, time)),
+            't' | 'T' => match adverb.as_str().chars().nth(2).expect("impossible string") {
+                // today
+                'd' | 'D' => Ok(moment_and_time(now, &Period::Day, time)),
+                // tomorrow
+                'm' | 'M' => Ok(moment_and_time(now + Duration::days(1), &Period::Day, time)),
+                _ => unreachable!()
+            },
+            // yesterday
+            'y' | 'Y' => Ok(moment_and_time(now - Duration::days(1), &Period::Day, time)),
+            _ => unreachable!()
         }
-        if adverb.has("today") {
-            return Ok(moment_and_time(now, &Period::Day, time));
-        }
-        if adverb.has("tomorrow") {
-            return Ok(moment_and_time(now + Duration::days(1), &Period::Day, time));
-        }
-        if adverb.has("yesterday") {
-            return Ok(moment_and_time(now - Duration::days(1), &Period::Day, time));
-        }
-        unreachable!();
     }
     if let Some(date) = m.name("date_with_year") {
         if let Some(date) = date.name("n_date") {
@@ -454,15 +481,6 @@ fn moment_to_period(now: DateTime<Utc>, period: &Period) -> (DateTime<Utc>, Date
         }
         Period::Nanosecond => (now, now + Duration::nanoseconds(1)),
     }
-}
-
-fn relative_moment(
-    m: &Match,
-    now: &DateTime<Utc>,
-    other_time: &DateTime<Utc>,
-    before: bool,
-) -> (DateTime<Utc>, DateTime<Utc>) {
-    unimplemented!();
 }
 
 pub enum Period {
