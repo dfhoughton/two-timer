@@ -15,14 +15,14 @@ lazy_static! {
 
         TOP -> r(r"\A") <something> r(r"\z")
 
-        something => <universal> | <existential>
+        something => <universal> | <particular>
         universal => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
-        existential => <one_moment> | <two_moments>
+        particular => <one_moment> | <two_moments>
         one_moment => <at_moment>
         two_moments -> <at_moment> <to> <at_moment>
         to => [["to", "through", "until", "up to", "thru", "till"]] | r("-+")
-        at_moment -> <at_time_on>? <moment> <at_time>? | <time>
-        moment => <specific> | <relative>
+        at_moment -> <at_time_on>? <some_day> <at_time>? | <time>
+        some_day => <specific> | <relative>
         specific => <adverb> | <date_with_year>
         relative => ("bar")
         adverb => [["now", "today", "tomorrow", "yesterday"]]
@@ -125,7 +125,7 @@ pub fn parse(
             chrono::MAX_DATE.and_hms_milli(23, 59, 59, 999),
         ));
     }
-    let parse = parse.name("existential").unwrap();
+    let parse = parse.name("particular").unwrap();
     let now = if now.is_some() {
         now.unwrap().clone()
     } else {
@@ -223,7 +223,7 @@ fn relative_moment(
     other_time: &DateTime<Utc>,
     before: bool,
 ) -> (DateTime<Utc>, DateTime<Utc>) {
-    if !m.has("moment") {
+    if !m.has("some_day") {
         // necessarily just time
         if let Some(t) = m.name("time") {
             let (hour, minute, second) = time(t);
