@@ -17,14 +17,20 @@ lazy_static! {
 
         something => <universal> | <particular>
         universal => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
-        particular => <one_moment> | <two_moments>
-        one_moment => <at_moment>
-        two_moments -> <at_moment> <to> <at_moment>
+        particular => <one_time> | <two_times>
+        one_time => <moment_or_period>
+        two_times -> <moment_or_period> <to> <moment_or_period>
         to => [["to", "through", "until", "up to", "thru", "till"]] | r("-+")
-        at_moment -> <at_time_on>? <some_day> <at_time>? | <time>
-        some_day => <specific> | <relative>
-        specific => <adverb> | <date_with_year>
-        relative => ("bar")
+        moment_or_period => <moment> | <period>
+        period => <named_period> | <modified_period>
+        named_period => <a_day> | <a_month> <year>?
+        modified_period => <modifier> <modifiable_period>
+        modifier => [["this", "last", "next"]]
+        modifiable_period => [["week", "month", "year", "pay period", "pp"]] | <a_month> | <a_day>
+        moment -> <at_time_on>? <some_day> <at_time>? | <time>
+        some_day => <specific_day> | <relative_day>
+        specific_day => <adverb> | <date_with_year>
+        relative_day => ("bar")
         adverb => [["now", "today", "tomorrow", "yesterday"]]
         date_with_year => <n_date> | <a_date>
         at_time -> ("at") <time>
@@ -136,20 +142,20 @@ pub fn parse(
     } else {
         Period::Minute
     };
-    if let Some(moment) = parse.name("one_moment") {
-        if moment.has("specific") {
+    if let Some(moment) = parse.name("one_time") {
+        if moment.has("specific_day") {
             return specific_moment(moment, &now, &period);
         }
-        if moment.has("relative") || moment.has("time") {
+        if moment.has("relative_day") || moment.has("time") {
             return Ok(relative_moment(moment, &now, &now, true));
         }
         unreachable!();
     }
-    if let Some(two_moments) = parse.name("two_moments") {
-        let first = &two_moments.children().unwrap()[0];
-        let last = &two_moments.children().unwrap()[2];
-        if first.has("specific") {
-            if last.has("specific") {
+    if let Some(two_times) = parse.name("two_times") {
+        let first = &two_times.children().unwrap()[0];
+        let last = &two_times.children().unwrap()[2];
+        if first.has("specific_day") {
+            if last.has("specific_day") {
                 return match specific_moment(first, &now, &period) {
                     Ok((d1, _)) => match specific_moment(last, &now, &period) {
                         Ok((_, d2)) => {
@@ -172,7 +178,7 @@ pub fn parse(
                     Err(s) => Err(s),
                 };
             }
-        } else if last.has("specific") {
+        } else if last.has("specific_day") {
             return match specific_moment(last, &now, &period) {
                 Ok((_, d2)) => {
                     let (d1, _) = relative_moment(first, &now, &d2, true);
