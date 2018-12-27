@@ -27,7 +27,7 @@ fn always() {
 #[test]
 fn yesterday() {
     let now = Utc::now();
-    let (start, end) = parse("yesterday", Some(Config::now(now))).unwrap();
+    let (start, end) = parse("yesterday", Some(Config::default().now(now))).unwrap();
     assert!(start < now);
     assert!(end < now);
     let then = now - Duration::days(1);
@@ -40,7 +40,7 @@ fn yesterday() {
 #[test]
 fn tomorrow() {
     let now = Utc::now();
-    let (start, end) = parse("tomorrow", Some(Config::now(now))).unwrap();
+    let (start, end) = parse("tomorrow", Some(Config::default().now(now))).unwrap();
     assert!(start > now);
     assert!(end > now);
     let then = now + Duration::days(1);
@@ -53,7 +53,7 @@ fn tomorrow() {
 #[test]
 fn today() {
     let now = Utc::now();
-    let (start, end) = parse("today", Some(Config::now(now))).unwrap();
+    let (start, end) = parse("today", Some(Config::default().now(now))).unwrap();
     assert!(start < now);
     assert!(end > now);
     let then = now + Duration::days(1);
@@ -154,7 +154,7 @@ fn at_3_pm() {
     let now = Utc.ymd(1969, 5, 6).and_hms(16, 0, 0);
     let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
     for phrase in ["3 PM", "3 pm", "15"].iter() {
-        let (start, end) = parse(phrase, Some(Config::now(now))).unwrap();
+        let (start, end) = parse(phrase, Some(Config::default().now(now))).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::hours(1), end);
     }
@@ -165,7 +165,7 @@ fn at_3_00_pm() {
     let now = Utc.ymd(1969, 5, 6).and_hms(16, 0, 0);
     let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
     for phrase in ["3:00 PM", "3:00 pm", "15:00"].iter() {
-        let (start, end) = parse(phrase, Some(Config::now(now))).unwrap();
+        let (start, end) = parse(phrase, Some(Config::default().now(now))).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::minutes(1), end);
     }
@@ -176,7 +176,7 @@ fn at_3_00_00_pm() {
     let now = Utc.ymd(1969, 5, 6).and_hms(16, 0, 0);
     let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
     for phrase in ["3:00:00 PM", "3:00:00 pm", "15:00:00"].iter() {
-        let (start, end) = parse(phrase, Some(Config::now(now))).unwrap();
+        let (start, end) = parse(phrase, Some(Config::default().now(now))).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::seconds(1), end);
     }
@@ -187,7 +187,7 @@ fn at_3_pm_yesterday() {
     let now = Utc.ymd(1969, 5, 6).and_hms(14, 0, 0);
     let then = Utc.ymd(1969, 5, 5).and_hms(15, 0, 0);
     for phrase in ["3 PM", "3 pm", "15"].iter() {
-        let (start, end) = parse(phrase, Some(Config::now(now))).unwrap();
+        let (start, end) = parse(phrase, Some(Config::default().now(now))).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::hours(1), end);
     }
@@ -338,4 +338,316 @@ fn may_1969() {
         assert_eq!(m1, start);
         assert_eq!(m2, end);
     }
+}
+
+#[test]
+fn this_month() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("this month", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_month() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 7, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("next month", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_month() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 4, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("last month", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_year() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 1, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("this year", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_year() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1971, 1, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("next year", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_year() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1968, 1, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 1, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("last year", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_week() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let (start, end) = parse("this week", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_week() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 19).and_hms(0, 0, 0);
+    let (start, end) = parse("next week", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_week() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 4, 28).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let (start, end) = parse("last week", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_week_sunday_starts() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 11).and_hms(0, 0, 0);
+    let (start, end) = parse(
+        "this week",
+        Some(Config::default().now(now).monday_starts_week(false)),
+    )
+    .unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_week_sunday_starts() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 11).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 18).and_hms(0, 0, 0);
+    let (start, end) = parse(
+        "next week",
+        Some(Config::default().now(now).monday_starts_week(false)),
+    )
+    .unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_week_sunday_starts() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 4, 27).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let (start, end) = parse(
+        "last week",
+        Some(Config::default().now(now).monday_starts_week(false)),
+    )
+    .unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_pay_period() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    // two-week pay period beginning about a year before "now" on a Sunday
+    let config = Config::default()
+        .pay_period_start(Some(Utc.ymd(1968, 5, 5)))
+        .pay_period_length(14)
+        .now(now);
+    let d1 = Utc.ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 18).and_hms(0, 0, 0);
+    let (start, end) = parse("this pay period", Some(config)).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_pay_period() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    // two-week pay period beginning about a year before "now" on a Sunday
+    let config = Config::default()
+        .pay_period_start(Some(Utc.ymd(1968, 5, 5)))
+        .pay_period_length(14)
+        .now(now);
+    let d1 = Utc.ymd(1969, 5, 18).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("next pay period", Some(config)).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_pay_period() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    // two-week pay period beginning about a year before "now" on a Sunday
+    let config = Config::default()
+        .pay_period_start(Some(Utc.ymd(1968, 5, 5)))
+        .pay_period_length(14)
+        .now(now);
+    let d1 = Utc.ymd(1969, 4, 20).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let (start, end) = parse("last pay period", Some(config)).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_pay_period_weird() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    // two-week pay period beginning about a year *after* "now" on a Sunday
+    let config = Config::default()
+        .pay_period_start(Some(Utc.ymd(1970, 4, 5)))
+        .pay_period_length(14)
+        .now(now);
+    let d1 = Utc.ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 18).and_hms(0, 0, 0);
+    let (start, end) = parse("this pay period", Some(config)).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_pay_period_weird() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    // two-week pay period beginning about a year *after* "now" on a Sunday
+    let config = Config::default()
+        .pay_period_start(Some(Utc.ymd(1970, 4, 5)))
+        .pay_period_length(14)
+        .now(now);
+    let d1 = Utc.ymd(1969, 5, 18).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("next pay period", Some(config)).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_pay_period_weird() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    // two-week pay period beginning about a year *after* "now" on a Sunday
+    let config = Config::default()
+        .pay_period_start(Some(Utc.ymd(1970, 4, 5)))
+        .pay_period_length(14)
+        .now(now);
+    let d1 = Utc.ymd(1969, 4, 20).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let (start, end) = parse("last pay period", Some(config)).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_april() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 4, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("this april", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_april() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1970, 4, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1970, 5, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("next april", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_april() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1968, 4, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1968, 5, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("last april", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_friday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 9).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let (start, end) = parse("this friday", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_friday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 16).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 17).and_hms(0, 0, 0);
+    let (start, end) = parse("next friday", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_friday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 2).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 3).and_hms(0, 0, 0);
+    let (start, end) = parse("last friday", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_monday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let (start, end) = parse("this monday", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_monday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 13).and_hms(0, 0, 0);
+    let (start, end) = parse("next monday", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_monday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 4, 28).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 4, 29).and_hms(0, 0, 0);
+    let (start, end) = parse("last monday", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
 }

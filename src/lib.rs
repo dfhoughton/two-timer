@@ -5,7 +5,7 @@ extern crate pidgin;
 extern crate lazy_static;
 extern crate chrono;
 use chrono::offset::LocalResult;
-use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc, Weekday};
+use chrono::{Date, DateTime, Datelike, Duration, TimeZone, Timelike, Utc, Weekday};
 use pidgin::{Grammar, Match, Matcher};
 use regex::Regex;
 
@@ -26,7 +26,7 @@ lazy_static! {
         specific_period => <modified_period> | <month_and_year>
         month_and_year -> <a_month> <year>
         named_period => <a_day> | <a_month>
-        modified_period => <modifier> <modifiable_period>
+        modified_period -> <modifier> <modifiable_period>
         modifier => [["this", "last", "next"]]
         modifiable_period => [["week", "month", "year", "pay period", "pp"]] | <a_month> | <a_day>
         moment -> <at_time_on>? <some_day> <at_time>? | <specific_time>
@@ -41,6 +41,7 @@ lazy_static! {
                 "the first instant",
                 "the dawn of time",
                 "the big bang",
+                "the birth of the universe",
             ]]
         last_time => [[
                 "the end",
@@ -150,9 +151,9 @@ lazy_static! {
 pub struct Config {
     now: DateTime<Utc>,
     monday_starts_week: bool,
-    default_period: Period,
-    pay_period_length: usize,
-    pay_period_start: Option<DateTime<Utc>>,
+    period: Period,
+    pay_period_length: u32,
+    pay_period_start: Option<Date<Utc>>,
 }
 
 impl Config {
@@ -160,19 +161,34 @@ impl Config {
         Config {
             now: Utc::now(),
             monday_starts_week: true,
-            default_period: Period::Minute,
+            period: Period::Minute,
             pay_period_length: 7,
             pay_period_start: None,
         }
     }
-    pub fn now(n: DateTime<Utc>) -> Config {
-        let mut c = Config::default();
+    pub fn now(&self, n: DateTime<Utc>) -> Config {
+        let mut c = self.clone();
         c.now = n;
         c
     }
-    fn period(&self, period: Period) -> Config {
+    pub fn period(&self, period: Period) -> Config {
         let mut c = self.clone();
-        c.default_period = period;
+        c.period = period;
+        c
+    }
+    pub fn monday_starts_week(&self, monday_starts_week: bool) -> Config {
+        let mut c = self.clone();
+        c.monday_starts_week = monday_starts_week;
+        c
+    }
+    pub fn pay_period_length(&self, pay_period_length: u32) -> Config {
+        let mut c = self.clone();
+        c.pay_period_length = pay_period_length;
+        c
+    }
+    pub fn pay_period_start(&self, pay_period_start: Option<Date<Utc>>) -> Config {
+        let mut c = self.clone();
+        c.pay_period_start = pay_period_start;
         c
     }
 }
@@ -274,14 +290,18 @@ fn handle_specific_day(
                 'd' | 'D' => Ok(moment_and_time(&config.period(Period::Day), time)),
                 // tomorrow
                 'm' | 'M' => Ok(moment_and_time(
-                    &Config::now(now + Duration::days(1)).period(Period::Day),
+                    &Config::default()
+                        .now(now + Duration::days(1))
+                        .period(Period::Day),
                     time,
                 )),
                 _ => unreachable!(),
             },
             // yesterday
             'y' | 'Y' => Ok(moment_and_time(
-                &Config::now(now - Duration::days(1)).period(Period::Day),
+                &Config::default()
+                    .now(now - Duration::days(1))
+                    .period(Period::Day),
                 time,
             )),
             _ => unreachable!(),
@@ -300,7 +320,10 @@ fn handle_specific_day(
                 )),
                 LocalResult::Single(d1) => {
                     let d1 = d1.and_hms(0, 0, 0);
-                    Ok(moment_and_time(&Config::now(d1).period(Period::Day), time))
+                    Ok(moment_and_time(
+                        &Config::default().now(d1).period(Period::Day),
+                        time,
+                    ))
                 }
                 LocalResult::Ambiguous(_, _) => Err(format!(
                     "cannot construct unambiguous UTC date with year {}, month {}, and day {}",
@@ -323,7 +346,10 @@ fn handle_specific_day(
                         let wd = weekday(wd.as_str());
                         if wd == d1.weekday() {
                             let d1 = d1.and_hms(0, 0, 0);
-                            Ok(moment_and_time(&Config::now(d1).period(Period::Day), time))
+                            Ok(moment_and_time(
+                                &Config::default().now(d1).period(Period::Day),
+                                time,
+                            ))
                         } else {
                             Err(format!(
                                 "the weekday of year {}, month {}, day {} is not {}",
@@ -335,7 +361,10 @@ fn handle_specific_day(
                         }
                     } else {
                         let d1 = d1.and_hms(0, 0, 0);
-                        Ok(moment_and_time(&Config::now(d1).period(Period::Day), time))
+                        Ok(moment_and_time(
+                            &Config::default().now(d1).period(Period::Day),
+                            time,
+                        ))
                     }
                 }
                 LocalResult::Ambiguous(_, _) => Err(format!(
@@ -357,33 +386,97 @@ fn handle_specific_period(
         let y = year(moment, &config.now);
         let m = a_month(moment);
         return match Utc.ymd_opt(y, m, 1) {
-            LocalResult::None => Err(format!(
-                "cannot construct UTC date with {}",
-                moment.as_str()
-            )),
+            LocalResult::None => unreachable!(),
             LocalResult::Single(d1) => {
                 let d1 = d1.and_hms(0, 0, 0);
                 Ok(moment_and_time(
-                    &Config::now(d1).period(Period::Month),
+                    &Config::default().now(d1).period(Period::Month),
                     None,
                 ))
             }
-            LocalResult::Ambiguous(_, _) => Err(format!(
-                "cannot construct unambiguous UTC date with {}",
-                moment.as_str()
-            )),
+            LocalResult::Ambiguous(_, _) => unreachable!(),
         };
     }
     if let Some(moment) = moment.name("modified_period") {
-        let modifier = PeriodModifier::from_match(moment.name("modifiable_period").unwrap());
-        match ModifiablePeriod::from_match(moment.name("modifier").unwrap()) {
-            ModifiablePeriod::Week => {}
-            ModifiablePeriod::Month => {}
-            ModifiablePeriod::Year => {}
-            ModifiablePeriod::PayPeriod => unimplemented!(),
+        let modifier = PeriodModifier::from_match(moment.name("modifier").unwrap());
+        if let Some(month) = moment.name("a_month") {
+            let d = config.now.with_month(a_month(month)).unwrap();
+            let (d, _) = moment_to_period(d, &Period::Month, config);
+            let d = match modifier {
+                PeriodModifier::Next => d.with_year(d.year() + 1).unwrap(),
+                PeriodModifier::Last => d.with_year(d.year() - 1).unwrap(),
+                PeriodModifier::This => d,
+            };
+            return Ok(moment_to_period(d, &Period::Month, config));
         }
+        if let Some(wd) = moment.name("a_day") {
+            let wd = weekday(wd.as_str());
+            let offset = config.now.weekday().num_days_from_monday() as i64
+                - wd.num_days_from_monday() as i64;
+            let d = config.now.date() - Duration::days(offset);
+            let d = match modifier {
+                PeriodModifier::Next => d + Duration::days(7),
+                PeriodModifier::Last => d - Duration::days(7),
+                PeriodModifier::This => d,
+            };
+            return Ok(moment_to_period(d.and_hms(0, 0, 0), &Period::Day, config));
+        }
+        return match ModifiablePeriod::from_match(moment.name("modifiable_period").unwrap()) {
+            ModifiablePeriod::Week => {
+                let (d, _) = moment_to_period(config.now, &Period::Week, config);
+                let d = match modifier {
+                    PeriodModifier::Next => d + Duration::days(7),
+                    PeriodModifier::Last => d - Duration::days(7),
+                    PeriodModifier::This => d,
+                };
+                Ok(moment_to_period(d, &Period::Week, config))
+            }
+            ModifiablePeriod::Month => {
+                let (d, _) = moment_to_period(config.now, &Period::Month, config);
+                let d = match modifier {
+                    PeriodModifier::Next => {
+                        if d.month() == 12 {
+                            d.with_year(d.year() + 1).unwrap().with_month(1).unwrap()
+                        } else {
+                            d.with_month(d.month() + 1).unwrap()
+                        }
+                    }
+                    PeriodModifier::Last => {
+                        if d.month() == 1 {
+                            d.with_year(d.year() - 1).unwrap().with_month(12).unwrap()
+                        } else {
+                            d.with_month(d.month() - 1).unwrap()
+                        }
+                    }
+                    PeriodModifier::This => d,
+                };
+                Ok(moment_to_period(d, &Period::Month, config))
+            }
+            ModifiablePeriod::Year => {
+                let (d, _) = moment_to_period(config.now, &Period::Year, config);
+                let d = match modifier {
+                    PeriodModifier::Next => d.with_year(d.year() + 1).unwrap(),
+                    PeriodModifier::Last => d.with_year(d.year() - 1).unwrap(),
+                    PeriodModifier::This => d,
+                };
+                Ok(moment_to_period(d, &Period::Year, config))
+            }
+            ModifiablePeriod::PayPeriod => {
+                if config.pay_period_start.is_some() {
+                    let (d, _) = moment_to_period(config.now, &Period::PayPeriod, config);
+                    let d = match modifier {
+                        PeriodModifier::Next => d + Duration::days(config.pay_period_length as i64),
+                        PeriodModifier::Last => d - Duration::days(config.pay_period_length as i64),
+                        PeriodModifier::This => d,
+                    };
+                    Ok(moment_to_period(d, &Period::PayPeriod, config))
+                } else {
+                    Err(String::from("no pay period start date provided"))
+                }
+            }
+        };
     }
-    unimplemented!()
+    unreachable!()
 }
 
 enum ModifiablePeriod {
@@ -430,7 +523,7 @@ fn handle_specific_time(
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
     if let Some(t) = moment.name("absolute_terminus") {
         return if t.has("first_time") {
-            Ok(moment_to_period(first_moment(), &config.default_period))
+            Ok(moment_to_period(first_moment(), &config.period, config))
         } else {
             Ok((last_moment(), last_moment()))
         };
@@ -456,7 +549,7 @@ fn handle_specific_time(
         } else if !before && t < *other_time {
             t = t + Duration::days(1);
         }
-        return Ok(moment_to_period(t, &period));
+        return Ok(moment_to_period(t, &period, config));
     } else {
         unreachable!();
     }
@@ -497,9 +590,9 @@ fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (DateTime<Utc>, 
             .unwrap()
             .with_second(second.unwrap_or(0))
             .unwrap();
-        moment_to_period(m, &period)
+        moment_to_period(m, &period, config)
     } else {
-        moment_to_period(config.now, &config.default_period)
+        moment_to_period(config.now, &config.period, config)
     }
 }
 
@@ -532,7 +625,7 @@ fn relative_moment(
             } else if !before && t < *other_time {
                 t = t + Duration::days(1);
             }
-            return moment_to_period(t, &period);
+            return moment_to_period(t, &period, config);
         } else {
             unreachable!();
         }
@@ -644,7 +737,11 @@ fn n_day(m: &Match) -> u32 {
 }
 
 /// expand a moment to the period containing it
-fn moment_to_period(now: DateTime<Utc>, period: &Period) -> (DateTime<Utc>, DateTime<Utc>) {
+fn moment_to_period(
+    now: DateTime<Utc>,
+    period: &Period,
+    config: &Config,
+) -> (DateTime<Utc>, DateTime<Utc>) {
     match period {
         Period::Year => {
             let d1 = Utc.ymd(now.year(), 1, 1).and_hms(0, 0, 0);
@@ -662,13 +759,13 @@ fn moment_to_period(now: DateTime<Utc>, period: &Period) -> (DateTime<Utc>, Date
             (d1, d2)
         }
         Period::Week => {
+            let offset = if config.monday_starts_week {
+                now.weekday().num_days_from_monday()
+            } else {
+                now.weekday().num_days_from_sunday()
+            };
             let d1 = Utc.ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0)
-                - Duration::days(now.weekday().num_days_from_monday() as i64);
-            (d1, d1 + Duration::days(7))
-        }
-        Period::WeekStartingSunday => {
-            let d1 = Utc.ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0)
-                - Duration::days(now.weekday().num_days_from_sunday() as i64);
+                - Duration::days(offset as i64);
             (d1, d1 + Duration::days(7))
         }
         Period::Day => {
@@ -696,6 +793,21 @@ fn moment_to_period(now: DateTime<Utc>, period: &Period) -> (DateTime<Utc>, Date
             (d1, d1 + Duration::seconds(1))
         }
         Period::Nanosecond => (now, now + Duration::nanoseconds(1)),
+        Period::PayPeriod => {
+            if let Some(pps) = config.pay_period_start {
+                // find the current pay period start
+                let offset = now.num_days_from_ce() - pps.num_days_from_ce();
+                let ppl = config.pay_period_length as i32;
+                let mut offset = (offset % ppl) as i64;
+                if offset < 0 {
+                    offset += config.pay_period_length as i64;
+                }
+                let d1 = (now.date() - Duration::days(offset)).and_hms(0, 0, 0);
+                (d1, d1 + Duration::days(config.pay_period_length as i64))
+            } else {
+                unreachable!()
+            }
+        }
     }
 }
 
@@ -704,12 +816,12 @@ pub enum Period {
     Year,
     Month,
     Week,
-    WeekStartingSunday,
     Day,
     Hour,
     Minute,
     Second,
     Nanosecond,
+    PayPeriod,
 }
 
 fn weekday(s: &str) -> Weekday {
