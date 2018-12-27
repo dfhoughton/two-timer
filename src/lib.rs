@@ -32,8 +32,34 @@ lazy_static! {
         moment -> <at_time_on>? <some_day> <at_time>? | <specific_time>
         specific_time => <time> | <absolute_terminus>
         absolute_terminus => <first_time> | <last_time>
-        first_time => [["the beginning", "the beginning of time", "the first moment", "the start", "the very start", "the first instant"]]
-        last_time => [["the end", "the end of time", "the very end", "the last moment", "eternity", "infinity", "doomsday", "the crack of doom"]]
+        first_time => [[
+                "the beginning",
+                "the beginning of time",
+                "the first moment",
+                "the start",
+                "the very start",
+                "the first instant",
+                "the dawn of time",
+                "the big bang",
+            ]]
+        last_time => [[
+                "the end",
+                "the end of time",
+                "the very end",
+                "the last moment",
+                "eternity",
+                "infinity",
+                "doomsday",
+                "the crack of doom",
+                "armageddon",
+                "ragnarok",
+                "the big crunch",
+                "the heat death of the universe",
+                "doom",
+                "death",
+                "perdition",
+                "the last hurrah",
+            ]]
         some_day => <specific_day> | <relative_day>
         specific_day => <adverb> | <date_with_year>
         relative_day => ("bar")
