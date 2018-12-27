@@ -1,6 +1,6 @@
 #![feature(test)]
 extern crate two_timer;
-use two_timer::parse;
+use two_timer::{parse, Config};
 extern crate chrono;
 use chrono::{Duration, TimeZone, Utc};
 
@@ -18,7 +18,7 @@ fn always() {
     ]
         .iter()
     {
-        let (start, end) = parse(phrase, None, None).unwrap();
+        let (start, end) = parse(phrase, None).unwrap();
         assert_eq!(alpha, start);
         assert_eq!(omega, end);
     }
@@ -27,7 +27,7 @@ fn always() {
 #[test]
 fn yesterday() {
     let now = Utc::now();
-    let (start, end) = parse("yesterday", Some(&now), None).unwrap();
+    let (start, end) = parse("yesterday", Some(Config::now(now))).unwrap();
     assert!(start < now);
     assert!(end < now);
     let then = now - Duration::days(1);
@@ -40,7 +40,7 @@ fn yesterday() {
 #[test]
 fn tomorrow() {
     let now = Utc::now();
-    let (start, end) = parse("tomorrow", Some(&now), None).unwrap();
+    let (start, end) = parse("tomorrow", Some(Config::now(now))).unwrap();
     assert!(start > now);
     assert!(end > now);
     let then = now + Duration::days(1);
@@ -53,7 +53,7 @@ fn tomorrow() {
 #[test]
 fn today() {
     let now = Utc::now();
-    let (start, end) = parse("today", Some(&now), None).unwrap();
+    let (start, end) = parse("today", Some(Config::now(now))).unwrap();
     assert!(start < now);
     assert!(end > now);
     let then = now + Duration::days(1);
@@ -75,7 +75,7 @@ fn day_5_6_69_at_3_30_pm() {
     ]
         .iter()
     {
-        let (start, end) = parse(phrase, None, None).unwrap();
+        let (start, end) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::minutes(1), end);
     }
@@ -92,7 +92,7 @@ fn day_5_6_69_at_3_pm() {
     ]
         .iter()
     {
-        let (start, end) = parse(phrase, None, None).unwrap();
+        let (start, end) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::hours(1), end);
     }
@@ -109,7 +109,7 @@ fn day_5_6_69_at_3_30_00_pm() {
     ]
         .iter()
     {
-        let (start, end) = parse(phrase, None, None).unwrap();
+        let (start, end) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::seconds(1), end);
     }
@@ -126,7 +126,7 @@ fn day_5_6_69_at_3_30_01_pm() {
     ]
         .iter()
     {
-        let (start, end) = parse(phrase, None, None).unwrap();
+        let (start, end) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::seconds(1), end);
     }
@@ -143,7 +143,7 @@ fn day_5_6_69_at_3_30_01_am() {
     ]
         .iter()
     {
-        let (start, end) = parse(phrase, None, None).unwrap();
+        let (start, end) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::seconds(1), end);
     }
@@ -154,7 +154,7 @@ fn at_3_pm() {
     let now = Utc.ymd(1969, 5, 6).and_hms(16, 0, 0);
     let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
     for phrase in ["3 PM", "3 pm", "15"].iter() {
-        let (start, end) = parse(phrase, Some(&now), None).unwrap();
+        let (start, end) = parse(phrase, Some(Config::now(now))).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::hours(1), end);
     }
@@ -165,7 +165,7 @@ fn at_3_00_pm() {
     let now = Utc.ymd(1969, 5, 6).and_hms(16, 0, 0);
     let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
     for phrase in ["3:00 PM", "3:00 pm", "15:00"].iter() {
-        let (start, end) = parse(phrase, Some(&now), None).unwrap();
+        let (start, end) = parse(phrase, Some(Config::now(now))).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::minutes(1), end);
     }
@@ -176,7 +176,7 @@ fn at_3_00_00_pm() {
     let now = Utc.ymd(1969, 5, 6).and_hms(16, 0, 0);
     let then = Utc.ymd(1969, 5, 6).and_hms(15, 0, 0);
     for phrase in ["3:00:00 PM", "3:00:00 pm", "15:00:00"].iter() {
-        let (start, end) = parse(phrase, Some(&now), None).unwrap();
+        let (start, end) = parse(phrase, Some(Config::now(now))).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::seconds(1), end);
     }
@@ -187,7 +187,7 @@ fn at_3_pm_yesterday() {
     let now = Utc.ymd(1969, 5, 6).and_hms(14, 0, 0);
     let then = Utc.ymd(1969, 5, 5).and_hms(15, 0, 0);
     for phrase in ["3 PM", "3 pm", "15"].iter() {
-        let (start, end) = parse(phrase, Some(&now), None).unwrap();
+        let (start, end) = parse(phrase, Some(Config::now(now))).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::hours(1), end);
     }
@@ -230,7 +230,7 @@ fn alphabetic_5_6_69() {
     ]
         .iter()
     {
-        let (start, end) = parse(phrase, None, None).unwrap();
+        let (start, end) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::days(1), end);
     }
@@ -315,7 +315,7 @@ fn ymd_5_31_69() {
     ]
         .iter()
     {
-        let (start, end) = parse(phrase, None, None).unwrap();
+        let (start, end) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::days(1), end);
     }
@@ -323,8 +323,19 @@ fn ymd_5_31_69() {
 
 #[test]
 fn leap_day() {
-    let rv = parse("2019-02-29", None, None);
+    let rv = parse("2019-02-29", None);
     assert!(rv.is_err());
-    let rv = parse("2020-02-29", None, None);
+    let rv = parse("2020-02-29", None);
     assert!(rv.is_ok());
+}
+
+#[test]
+fn may_1969() {
+    let m1 = Utc.ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let m2 = Utc.ymd(1969, 6, 1).and_hms(0, 0, 0);
+    for phrase in ["May 1969", "May '69"].iter() {
+        let (start, end) = parse(phrase, None).unwrap();
+        assert_eq!(m1, start);
+        assert_eq!(m2, end);
+    }
 }

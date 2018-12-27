@@ -118,10 +118,40 @@ lazy_static! {
     static ref MATCHER: Matcher = GRAMMAR.matcher().unwrap();
 }
 
+#[derive(Debug, Clone)]
+pub struct Config {
+    now: DateTime<Utc>,
+    monday_starts_week: bool,
+    default_period: Period,
+    pay_period_length: usize,
+    pay_period_start: Option<DateTime<Utc>>,
+}
+
+impl Config {
+    pub fn default() -> Config {
+        Config {
+            now: Utc::now(),
+            monday_starts_week: true,
+            default_period: Period::Minute,
+            pay_period_length: 7,
+            pay_period_start: None,
+        }
+    }
+    pub fn now(n: DateTime<Utc>) -> Config {
+        let mut c = Config::default();
+        c.now = n;
+        c
+    }
+    fn period(&self, period: Period) -> Config {
+        let mut c = self.clone();
+        c.default_period = period;
+        c
+    }
+}
+
 pub fn parse(
     phrase: &str,
-    now: Option<&DateTime<Utc>>,
-    period: Option<Period>,
+    config: Option<Config>,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
     let parse = MATCHER.parse(phrase);
     if parse.is_none() {
@@ -135,26 +165,17 @@ pub fn parse(
         return Ok((first_moment(), last_moment()));
     }
     let parse = parse.name("particular").unwrap();
-    let now = if now.is_some() {
-        now.unwrap().clone()
-    } else {
-        Utc::now()
-    };
-    let period = if period.is_some() {
-        period.unwrap()
-    } else {
-        Period::Minute
-    };
+    let config = config.unwrap_or(Config::default());
     if let Some(moment) = parse.name("one_time") {
-        return handle_one_time(moment, &now, &period);
+        return handle_one_time(moment, &config);
     }
     if let Some(two_times) = parse.name("two_times") {
         let first = &two_times.children().unwrap()[0];
         let last = &two_times.children().unwrap()[2];
         if specific(first, true) {
             if specific(last, true) {
-                return match specific_moment(first, &now, &period) {
-                    Ok((d1, _)) => match specific_moment(last, &now, &period) {
+                return match specific_moment(first, &config) {
+                    Ok((d1, _)) => match specific_moment(last, &config) {
                         Ok((_, d2)) => {
                             if d1 <= d2 {
                                 Ok((d1, d2))
@@ -167,25 +188,25 @@ pub fn parse(
                     Err(s) => Err(s),
                 };
             } else {
-                return match specific_moment(first, &now, &period) {
+                return match specific_moment(first, &config) {
                     Ok((d1, _)) => {
-                        let (_, d2) = relative_moment(last, &now, &d1, false);
+                        let (_, d2) = relative_moment(last, &config, &d1, false);
                         Ok((d1, d2))
                     }
                     Err(s) => Err(s),
                 };
             }
         } else if specific(last, false) {
-            return match specific_moment(last, &now, &period) {
+            return match specific_moment(last, &config) {
                 Ok((_, d2)) => {
-                    let (d1, _) = relative_moment(first, &now, &d2, true);
+                    let (d1, _) = relative_moment(first, &config, &d2, true);
                     Ok((d1, d2))
                 }
                 Err(s) => Err(s),
             };
         } else {
-            let (_, d2) = relative_moment(last, &now, &now, true);
-            let (d1, _) = relative_moment(first, &now, &d2, true);
+            let (_, d2) = relative_moment(last, &config, &config.now, true);
+            let (d1, _) = relative_moment(first, &config, &d2, true);
             return Ok((d1, d2));
         }
     }
@@ -208,10 +229,9 @@ fn specific(m: &Match, first: bool) -> bool {
 
 fn handle_specific_day(
     m: &Match,
-    now: &DateTime<Utc>,
-    period: &Period,
+    config: &Config,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
-    let now = now.clone();
+    let now = config.now.clone();
     let mut times = m.all_names("time");
     if times.len() > 1 {
         return Err(format!("more than one daytime specified in {}", m.as_str()));
@@ -220,16 +240,22 @@ fn handle_specific_day(
     if let Some(adverb) = m.name("adverb") {
         return match adverb.as_str().chars().nth(0).expect("empty string") {
             // now
-            'n' | 'N' => Ok(moment_and_time(now, period, time)),
+            'n' | 'N' => Ok(moment_and_time(config, time)),
             't' | 'T' => match adverb.as_str().chars().nth(2).expect("impossible string") {
                 // today
-                'd' | 'D' => Ok(moment_and_time(now, &Period::Day, time)),
+                'd' | 'D' => Ok(moment_and_time(&config.period(Period::Day), time)),
                 // tomorrow
-                'm' | 'M' => Ok(moment_and_time(now + Duration::days(1), &Period::Day, time)),
+                'm' | 'M' => Ok(moment_and_time(
+                    &Config::now(now + Duration::days(1)).period(Period::Day),
+                    time,
+                )),
                 _ => unreachable!(),
             },
             // yesterday
-            'y' | 'Y' => Ok(moment_and_time(now - Duration::days(1), &Period::Day, time)),
+            'y' | 'Y' => Ok(moment_and_time(
+                &Config::now(now - Duration::days(1)).period(Period::Day),
+                time,
+            )),
             _ => unreachable!(),
         };
     }
@@ -246,7 +272,7 @@ fn handle_specific_day(
                 )),
                 LocalResult::Single(d1) => {
                     let d1 = d1.and_hms(0, 0, 0);
-                    Ok(moment_and_time(d1, &Period::Day, time))
+                    Ok(moment_and_time(&Config::now(d1).period(Period::Day), time))
                 }
                 LocalResult::Ambiguous(_, _) => Err(format!(
                     "cannot construct unambiguous UTC date with year {}, month {}, and day {}",
@@ -269,7 +295,7 @@ fn handle_specific_day(
                         let wd = weekday(wd.as_str());
                         if wd == d1.weekday() {
                             let d1 = d1.and_hms(0, 0, 0);
-                            Ok(moment_and_time(d1, &Period::Day, time))
+                            Ok(moment_and_time(&Config::now(d1).period(Period::Day), time))
                         } else {
                             Err(format!(
                                 "the weekday of year {}, month {}, day {} is not {}",
@@ -281,7 +307,7 @@ fn handle_specific_day(
                         }
                     } else {
                         let d1 = d1.and_hms(0, 0, 0);
-                        Ok(moment_and_time(d1, &Period::Day, time))
+                        Ok(moment_and_time(&Config::now(d1).period(Period::Day), time))
                     }
                 }
                 LocalResult::Ambiguous(_, _) => Err(format!(
@@ -297,25 +323,89 @@ fn handle_specific_day(
 
 fn handle_specific_period(
     moment: &Match,
-    now: &DateTime<Utc>,
-    period: &Period,
+    config: &Config,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+    if let Some(moment) = moment.name("month_and_year") {
+        let y = year(moment, &config.now);
+        let m = a_month(moment);
+        return match Utc.ymd_opt(y, m, 1) {
+            LocalResult::None => Err(format!(
+                "cannot construct UTC date with {}",
+                moment.as_str()
+            )),
+            LocalResult::Single(d1) => {
+                let d1 = d1.and_hms(0, 0, 0);
+                Ok(moment_and_time(
+                    &Config::now(d1).period(Period::Month),
+                    None,
+                ))
+            }
+            LocalResult::Ambiguous(_, _) => Err(format!(
+                "cannot construct unambiguous UTC date with {}",
+                moment.as_str()
+            )),
+        };
+    }
+    if let Some(moment) = moment.name("modified_period") {
+        let modifier = PeriodModifier::from_match(moment.name("modifiable_period").unwrap());
+        match ModifiablePeriod::from_match(moment.name("modifier").unwrap()) {
+            ModifiablePeriod::Week => {}
+            ModifiablePeriod::Month => {}
+            ModifiablePeriod::Year => {}
+            ModifiablePeriod::PayPeriod => unimplemented!(),
+        }
+    }
     unimplemented!()
+}
+
+enum ModifiablePeriod {
+    Week,
+    Month,
+    Year,
+    PayPeriod,
+}
+
+impl ModifiablePeriod {
+    fn from_match(m: &Match) -> ModifiablePeriod {
+        match m.as_str().chars().nth(0).expect("unreachable") {
+            'w' | 'W' => ModifiablePeriod::Week,
+            'm' | 'M' => ModifiablePeriod::Month,
+            'y' | 'Y' => ModifiablePeriod::Year,
+            'p' | 'P' => ModifiablePeriod::PayPeriod,
+            _ => unreachable!(),
+        }
+    }
+}
+
+enum PeriodModifier {
+    This,
+    Next,
+    Last,
+}
+
+impl PeriodModifier {
+    fn from_match(m: &Match) -> PeriodModifier {
+        match m.as_str().chars().nth(0).expect("unreachable") {
+            't' | 'T' => PeriodModifier::This,
+            'l' | 'L' => PeriodModifier::Last,
+            'n' | 'N' => PeriodModifier::Next,
+            _ => unreachable!(),
+        }
+    }
 }
 
 fn handle_specific_time(
     moment: &Match,
-    now: &DateTime<Utc>,
+    config: &Config,
     other_time: &DateTime<Utc>,
     before: bool,
-    period: &Period,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
     if let Some(t) = moment.name("absolute_terminus") {
         return if t.has("first_time") {
-            Ok(moment_to_period(first_moment(), period))
+            Ok(moment_to_period(first_moment(), &config.default_period))
         } else {
             Ok((last_moment(), last_moment()))
-        }
+        };
     }
     if let Some(t) = moment.name("time") {
         let (hour, minute, second) = time(t);
@@ -346,27 +436,22 @@ fn handle_specific_time(
 
 fn handle_one_time(
     moment: &Match,
-    now: &DateTime<Utc>,
-    period: &Period,
+    config: &Config,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
     if moment.has("specific_day") {
-        return handle_specific_day(moment, now, period);
+        return handle_specific_day(moment, config);
     }
     if let Some(moment) = moment.name("specific_period") {
-        return handle_specific_period(moment, now, period);
+        return handle_specific_period(moment, config);
     }
     if let Some(moment) = moment.name("specific_time") {
-        return handle_specific_time(moment, now, now, true, period);
+        return handle_specific_time(moment, config, &config.now, true);
     }
     unimplemented!();
 }
 
 // add time to a date
-fn moment_and_time(
-    m: DateTime<Utc>,
-    default_period: &Period,
-    daytime: Option<&Match>,
-) -> (DateTime<Utc>, DateTime<Utc>) {
+fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (DateTime<Utc>, DateTime<Utc>) {
     if let Some(daytime) = daytime {
         let (hour, minute, second) = time(daytime);
         let period = if second.is_some() {
@@ -376,7 +461,8 @@ fn moment_and_time(
         } else {
             Period::Hour
         };
-        let m = m
+        let m = config
+            .now
             .with_hour(hour)
             .unwrap()
             .with_minute(minute.unwrap_or(0))
@@ -385,13 +471,13 @@ fn moment_and_time(
             .unwrap();
         moment_to_period(m, &period)
     } else {
-        moment_to_period(m, default_period)
+        moment_to_period(config.now, &config.default_period)
     }
 }
 
 fn relative_moment(
     m: &Match,
-    now: &DateTime<Utc>,
+    config: &Config,
     other_time: &DateTime<Utc>,
     before: bool,
 ) -> (DateTime<Utc>, DateTime<Utc>) {
@@ -426,19 +512,15 @@ fn relative_moment(
     unimplemented!();
 }
 
-fn specific_moment(
-    m: &Match,
-    now: &DateTime<Utc>,
-    period: &Period,
-) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+fn specific_moment(m: &Match, config: &Config) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
     if let Some(m) = m.name("specific_day") {
-        return handle_specific_day(m, now, period)
+        return handle_specific_day(m, config);
     }
     if let Some(m) = m.name("specific_period") {
-        return handle_specific_period(m, now, period)
+        return handle_specific_period(m, config);
     }
     if let Some(m) = m.name("specific_time") {
-        return handle_specific_time(m, now, now, true, period)
+        return handle_specific_time(m, config, &config.now, true);
     }
     unreachable!()
 }
@@ -589,6 +671,7 @@ fn moment_to_period(now: DateTime<Utc>, period: &Period) -> (DateTime<Utc>, Date
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Period {
     Year,
     Month,
