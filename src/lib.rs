@@ -22,12 +22,18 @@ lazy_static! {
         two_times -> <moment_or_period> <to> <moment_or_period>
         to => [["to", "through", "until", "up to", "thru", "till"]] | r("-+")
         moment_or_period => <moment> | <period>
-        period => <named_period> | <modified_period>
-        named_period => <a_day> | <a_month> <year>?
+        period => <named_period> | <specific_period>
+        specific_period => <modified_period> | <month_and_year>
+        month_and_year -> <a_month> <year>
+        named_period => <a_day> | <a_month>
         modified_period => <modifier> <modifiable_period>
         modifier => [["this", "last", "next"]]
         modifiable_period => [["week", "month", "year", "pay period", "pp"]] | <a_month> | <a_day>
-        moment -> <at_time_on>? <some_day> <at_time>? | <time>
+        moment -> <at_time_on>? <some_day> <at_time>? | <specific_time>
+        specific_time => <time> | <absolute_terminus>
+        absolute_terminus => <first_time> | <last_time>
+        first_time => [["the beginning", "the beginning of time", "the first moment", "the start", "the very start", "the first instant"]]
+        last_time => [["the end", "the end of time", "the very end", "the last moment", "eternity", "infinity", "doomsday", "the crack of doom"]]
         some_day => <specific_day> | <relative_day>
         specific_day => <adverb> | <date_with_year>
         relative_day => ("bar")
@@ -126,10 +132,7 @@ pub fn parse(
     }
     let parse = parse.unwrap();
     if parse.has("universal") {
-        return Ok((
-            chrono::MIN_DATE.and_hms_milli(0, 0, 0, 0),
-            chrono::MAX_DATE.and_hms_milli(23, 59, 59, 999),
-        ));
+        return Ok((first_moment(), last_moment()));
     }
     let parse = parse.name("particular").unwrap();
     let now = if now.is_some() {
@@ -143,19 +146,13 @@ pub fn parse(
         Period::Minute
     };
     if let Some(moment) = parse.name("one_time") {
-        if moment.has("specific_day") {
-            return specific_moment(moment, &now, &period);
-        }
-        if moment.has("relative_day") || moment.has("time") {
-            return Ok(relative_moment(moment, &now, &now, true));
-        }
-        unreachable!();
+        return handle_one_time(moment, &now, &period);
     }
     if let Some(two_times) = parse.name("two_times") {
         let first = &two_times.children().unwrap()[0];
         let last = &two_times.children().unwrap()[2];
-        if first.has("specific_day") {
-            if last.has("specific_day") {
+        if specific(first, true) {
+            if specific(last, true) {
                 return match specific_moment(first, &now, &period) {
                     Ok((d1, _)) => match specific_moment(last, &now, &period) {
                         Ok((_, d2)) => {
@@ -178,7 +175,7 @@ pub fn parse(
                     Err(s) => Err(s),
                 };
             }
-        } else if last.has("specific_day") {
+        } else if specific(last, false) {
             return match specific_moment(last, &now, &period) {
                 Ok((_, d2)) => {
                     let (d1, _) = relative_moment(first, &now, &d2, true);
@@ -195,66 +192,21 @@ pub fn parse(
     unreachable!();
 }
 
-// add time to a date
-fn moment_and_time(
-    m: DateTime<Utc>,
-    default_period: &Period,
-    daytime: Option<&Match>,
-) -> (DateTime<Utc>, DateTime<Utc>) {
-    if let Some(daytime) = daytime {
-        let (hour, minute, second) = time(daytime);
-        let period = if second.is_some() {
-            Period::Second
-        } else if minute.is_some() {
-            Period::Minute
-        } else {
-            Period::Hour
-        };
-        let m = m
-            .with_hour(hour)
-            .unwrap()
-            .with_minute(minute.unwrap_or(0))
-            .unwrap()
-            .with_second(second.unwrap_or(0))
-            .unwrap();
-        moment_to_period(m, &period)
-    } else {
-        moment_to_period(m, default_period)
-    }
+fn first_moment() -> DateTime<Utc> {
+    chrono::MIN_DATE.and_hms_milli(0, 0, 0, 0)
 }
 
-fn relative_moment(
-    m: &Match,
-    now: &DateTime<Utc>,
-    other_time: &DateTime<Utc>,
-    before: bool,
-) -> (DateTime<Utc>, DateTime<Utc>) {
-    if !m.has("some_day") {
-        // necessarily just time
-        if let Some(t) = m.name("time") {
-            let (hour, minute, second) = time(t);
-            let period = if second.is_some() {
-                Period::Second
-            } else if minute.is_some() {
-                Period::Minute
-            } else {
-                Period::Hour
-            };
-            let mut t = other_time.with_hour(hour).unwrap().with_minute(minute.unwrap_or(0)).unwrap().with_second(second.unwrap_or(0)).unwrap();
-            if before && t > *other_time {
-                t = t - Duration::days(1);
-            } else if !before && t < *other_time {
-                t = t + Duration::days(1);
-            }
-            return moment_to_period(t, &period)
-        } else {
-            unreachable!();
-        }
-    }
-    unimplemented!();
+fn last_moment() -> DateTime<Utc> {
+    chrono::MAX_DATE.and_hms_milli(23, 59, 59, 999)
 }
 
-fn specific_moment(
+fn specific(m: &Match, first: bool) -> bool {
+    m.has("specific_day")
+        || m.has("specific_period")
+        || m.has("specific_time") && (first || m.has("absolute_terminus"))
+}
+
+fn handle_specific_day(
     m: &Match,
     now: &DateTime<Utc>,
     period: &Period,
@@ -274,12 +226,12 @@ fn specific_moment(
                 'd' | 'D' => Ok(moment_and_time(now, &Period::Day, time)),
                 // tomorrow
                 'm' | 'M' => Ok(moment_and_time(now + Duration::days(1), &Period::Day, time)),
-                _ => unreachable!()
+                _ => unreachable!(),
             },
             // yesterday
             'y' | 'Y' => Ok(moment_and_time(now - Duration::days(1), &Period::Day, time)),
-            _ => unreachable!()
-        }
+            _ => unreachable!(),
+        };
     }
     if let Some(date) = m.name("date_with_year") {
         if let Some(date) = date.name("n_date") {
@@ -341,6 +293,154 @@ fn specific_moment(
         unreachable!();
     }
     unimplemented!();
+}
+
+fn handle_specific_period(
+    moment: &Match,
+    now: &DateTime<Utc>,
+    period: &Period,
+) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+    unimplemented!()
+}
+
+fn handle_specific_time(
+    moment: &Match,
+    now: &DateTime<Utc>,
+    other_time: &DateTime<Utc>,
+    before: bool,
+    period: &Period,
+) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+    if let Some(t) = moment.name("absolute_terminus") {
+        return if t.has("first_time") {
+            Ok(moment_to_period(first_moment(), period))
+        } else {
+            Ok((last_moment(), last_moment()))
+        }
+    }
+    if let Some(t) = moment.name("time") {
+        let (hour, minute, second) = time(t);
+        let period = if second.is_some() {
+            Period::Second
+        } else if minute.is_some() {
+            Period::Minute
+        } else {
+            Period::Hour
+        };
+        let mut t = other_time
+            .with_hour(hour)
+            .unwrap()
+            .with_minute(minute.unwrap_or(0))
+            .unwrap()
+            .with_second(second.unwrap_or(0))
+            .unwrap();
+        if before && t > *other_time {
+            t = t - Duration::days(1);
+        } else if !before && t < *other_time {
+            t = t + Duration::days(1);
+        }
+        return Ok(moment_to_period(t, &period));
+    } else {
+        unreachable!();
+    }
+}
+
+fn handle_one_time(
+    moment: &Match,
+    now: &DateTime<Utc>,
+    period: &Period,
+) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+    if moment.has("specific_day") {
+        return handle_specific_day(moment, now, period);
+    }
+    if let Some(moment) = moment.name("specific_period") {
+        return handle_specific_period(moment, now, period);
+    }
+    if let Some(moment) = moment.name("specific_time") {
+        return handle_specific_time(moment, now, now, true, period);
+    }
+    unimplemented!();
+}
+
+// add time to a date
+fn moment_and_time(
+    m: DateTime<Utc>,
+    default_period: &Period,
+    daytime: Option<&Match>,
+) -> (DateTime<Utc>, DateTime<Utc>) {
+    if let Some(daytime) = daytime {
+        let (hour, minute, second) = time(daytime);
+        let period = if second.is_some() {
+            Period::Second
+        } else if minute.is_some() {
+            Period::Minute
+        } else {
+            Period::Hour
+        };
+        let m = m
+            .with_hour(hour)
+            .unwrap()
+            .with_minute(minute.unwrap_or(0))
+            .unwrap()
+            .with_second(second.unwrap_or(0))
+            .unwrap();
+        moment_to_period(m, &period)
+    } else {
+        moment_to_period(m, default_period)
+    }
+}
+
+fn relative_moment(
+    m: &Match,
+    now: &DateTime<Utc>,
+    other_time: &DateTime<Utc>,
+    before: bool,
+) -> (DateTime<Utc>, DateTime<Utc>) {
+    if !m.has("some_day") {
+        // necessarily just time
+        if let Some(t) = m.name("time") {
+            let (hour, minute, second) = time(t);
+            let period = if second.is_some() {
+                Period::Second
+            } else if minute.is_some() {
+                Period::Minute
+            } else {
+                Period::Hour
+            };
+            let mut t = other_time
+                .with_hour(hour)
+                .unwrap()
+                .with_minute(minute.unwrap_or(0))
+                .unwrap()
+                .with_second(second.unwrap_or(0))
+                .unwrap();
+            if before && t > *other_time {
+                t = t - Duration::days(1);
+            } else if !before && t < *other_time {
+                t = t + Duration::days(1);
+            }
+            return moment_to_period(t, &period);
+        } else {
+            unreachable!();
+        }
+    }
+    unimplemented!();
+}
+
+fn specific_moment(
+    m: &Match,
+    now: &DateTime<Utc>,
+    period: &Period,
+) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+    if let Some(m) = m.name("specific_day") {
+        return handle_specific_day(m, now, period)
+    }
+    if let Some(m) = m.name("specific_period") {
+        return handle_specific_period(m, now, period)
+    }
+    if let Some(m) = m.name("specific_time") {
+        return handle_specific_time(m, now, now, true, period)
+    }
+    unreachable!()
 }
 
 fn a_month(m: &Match) -> u32 {
