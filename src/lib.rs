@@ -59,6 +59,8 @@ lazy_static! {
                 "death",
                 "perdition",
                 "the last hurrah",
+                "ever after",
+                "the last syllable of recorded time",
             ]]
         some_day => <specific_day> | <relative_day>
         specific_day => <adverb> | <date_with_year>
