@@ -219,7 +219,8 @@ pub fn parse(
             if specific(last) {
                 return match specific_moment(first, &config) {
                     Ok((d1, _)) => match specific_moment(last, &config) {
-                        Ok((_, d2)) => {
+                        Ok((d2, d3)) => {
+                            let d2 = pick_terminus(d2, d3);
                             if d1 <= d2 {
                                 Ok((d1, d2))
                             } else {
@@ -233,7 +234,8 @@ pub fn parse(
             } else {
                 return match specific_moment(first, &config) {
                     Ok((d1, _)) => {
-                        let (_, d2) = relative_moment(last, &config, &d1, false);
+                        let (d2, d3) = relative_moment(last, &config, &d1, false);
+                        let d2 = pick_terminus(d2, d3);
                         Ok((d1, d2))
                     }
                     Err(s) => Err(s),
@@ -241,7 +243,8 @@ pub fn parse(
             }
         } else if specific(last) {
             return match specific_moment(last, &config) {
-                Ok((_, d2)) => {
+                Ok((d2, d3)) => {
+                    let d2 = pick_terminus(d2, d3);
                     let (d1, _) = relative_moment(first, &config, &d2, true);
                     Ok((d1, d2))
                 }
@@ -251,11 +254,22 @@ pub fn parse(
             // the first moment is assumed to be before now
             let (d1, _) = relative_moment(first, &config, &config.now, true);
             // the second moment is necessarily after the first momentß
-            let (_, d2) = relative_moment(last, &config, &d1, false);
+            let (d2, d3) = relative_moment(last, &config, &d1, false);
+            let d2 = pick_terminus(d2, d3);
             return Ok((d1, d2));
         }
     }
     unreachable!();
+}
+
+// for the end time, if the span is less than a day, use the first, otherwise use the second
+// e.g., Monday through Friday at 3 PM should end at 3 PM, but Monday through Friday should end at the end of Friday
+fn pick_terminus(d1: DateTime<Utc>, d2: DateTime<Utc>) -> DateTime<Utc> {
+    if d1.day() == d2.day() && d1.month() == d2.month() && d1.year() == d2.year() {
+        d1
+    } else {
+        d2
+    }
 }
 
 fn first_moment() -> DateTime<Utc> {
@@ -575,7 +589,7 @@ fn relative_moment(
     if let Some(day) = m.name("a_day") {
         let wd = weekday(day.as_str());
         let mut delta =
-            config.now.weekday().num_days_from_sunday() as i64 - wd.num_days_from_sunday() as i64;
+            other_time.weekday().num_days_from_sunday() as i64 - wd.num_days_from_sunday() as i64;
         if delta <= 0 {
             delta += 7;
         }

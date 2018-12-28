@@ -787,3 +787,47 @@ fn just_june() {
     assert_eq!(d1, start);
     assert_eq!(d2, end);
 }
+
+#[test]
+fn monday_through_friday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let (start, end) = parse("Monday through Friday", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn tuesday_through_friday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 4, 29).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 3).and_hms(0, 0, 0);
+    let (start, end) = parse("Tuesday through Friday", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn tuesday_through_3_pm_on_friday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 4, 29).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 2).and_hms(15, 0, 0);
+    let (start, end) = parse(
+        "Tuesday through 3 PM on Friday",
+        Some(Config::default().now(now)),
+    )
+    .unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_year_through_today() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 1, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 7).and_hms(0, 0, 0);
+    let (start, end) = parse("this year through today", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
