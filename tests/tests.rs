@@ -186,7 +186,7 @@ fn at_3_00_00_pm() {
 fn at_3_pm_yesterday() {
     let now = Utc.ymd(1969, 5, 6).and_hms(14, 0, 0);
     let then = Utc.ymd(1969, 5, 5).and_hms(15, 0, 0);
-    for phrase in ["3 PM", "3 pm", "15"].iter() {
+    for phrase in ["3 PM yesterday", "3 pm yesterday", "15 yesterday"].iter() {
         let (start, end) = parse(phrase, Some(Config::default().now(now))).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::hours(1), end);
@@ -650,4 +650,134 @@ fn last_monday() {
     let (start, end) = parse("last monday", Some(Config::default().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
+}
+
+#[test]
+fn dawn_of_time() {
+    let then = chrono::MIN_DATE.and_hms_milli(0, 0, 0, 0);
+    for phrase in [
+        "the beginning",
+        "the beginning of time",
+        "the first moment",
+        "the start",
+        "the very start",
+        "the first instant",
+        "the dawn of time",
+        "the big bang",
+        "the birth of the universe",
+    ]
+        .iter()
+    {
+        let (start, end) = parse(phrase, None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::minutes(1), end);
+    }
+}
+
+#[test]
+fn the_crack_of_doom() {
+    let then = chrono::MAX_DATE.and_hms_milli(23, 59, 59, 999);
+    for phrase in [
+        "the end",
+        "the end of time",
+        "the very end",
+        "the last moment",
+        "eternity",
+        "infinity",
+        "doomsday",
+        "the crack of doom",
+        "armageddon",
+        "ragnarok",
+        "the big crunch",
+        "the heat death of the universe",
+        "doom",
+        "death",
+        "perdition",
+        "the last hurrah",
+        "ever after",
+        "the last syllable of recorded time",
+    ]
+        .iter()
+    {
+        let (_, end) = parse(phrase, None).unwrap();
+        assert_eq!(then, end);
+    }
+}
+
+#[test]
+fn friday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let then = Utc.ymd(1969, 5, 2).and_hms(0, 0, 0);
+    let (start, end) = parse(
+        "Friday",
+        Some(Config::default().now(now)),
+    )
+    .unwrap();
+    assert_eq!(then, start);
+    assert_eq!(then + Duration::days(1), end);
+}
+
+#[test]
+fn tuesday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let then = Utc.ymd(1969, 4, 29).and_hms(0, 0, 0);
+    let (start, end) = parse(
+        "Tuesday",
+        Some(Config::default().now(now)),
+    )
+    .unwrap();
+    assert_eq!(then, start);
+    assert_eq!(then + Duration::days(1), end);
+}
+
+#[test]
+fn monday() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let then = Utc.ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let (start, end) = parse(
+        "Monday",
+        Some(Config::default().now(now)),
+    )
+    .unwrap();
+    assert_eq!(then, start);
+    assert_eq!(then + Duration::days(1), end);
+}
+
+#[test]
+fn friday_at_3_pm() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let then = Utc.ymd(1969, 5, 2).and_hms(15, 0, 0);
+    let (start, end) = parse(
+        "Friday at 3 pm",
+        Some(Config::default().now(now)),
+    )
+    .unwrap();
+    assert_eq!(then, start);
+    assert_eq!(then + Duration::hours(1), end);
+}
+
+#[test]
+fn tuesday_at_3_pm() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let then = Utc.ymd(1969, 4, 29).and_hms(15, 0, 0);
+    let (start, end) = parse(
+        "Tuesday at 3 pm",
+        Some(Config::default().now(now)),
+    )
+    .unwrap();
+    assert_eq!(then, start);
+    assert_eq!(then + Duration::hours(1), end);
+}
+
+#[test]
+fn monday_at_3_pm() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let then = Utc.ymd(1969, 5, 5).and_hms(15, 0, 0);
+    let (start, end) = parse(
+        "Monday at 3 pm",
+        Some(Config::default().now(now)),
+    )
+    .unwrap();
+    assert_eq!(then, start);
+    assert_eq!(then + Duration::hours(1), end);
 }
