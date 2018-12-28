@@ -708,11 +708,7 @@ fn the_crack_of_doom() {
 fn friday() {
     let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
     let then = Utc.ymd(1969, 5, 2).and_hms(0, 0, 0);
-    let (start, end) = parse(
-        "Friday",
-        Some(Config::default().now(now)),
-    )
-    .unwrap();
+    let (start, end) = parse("Friday", Some(Config::default().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::days(1), end);
 }
@@ -721,11 +717,7 @@ fn friday() {
 fn tuesday() {
     let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
     let then = Utc.ymd(1969, 4, 29).and_hms(0, 0, 0);
-    let (start, end) = parse(
-        "Tuesday",
-        Some(Config::default().now(now)),
-    )
-    .unwrap();
+    let (start, end) = parse("Tuesday", Some(Config::default().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::days(1), end);
 }
@@ -734,11 +726,7 @@ fn tuesday() {
 fn monday() {
     let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
     let then = Utc.ymd(1969, 5, 5).and_hms(0, 0, 0);
-    let (start, end) = parse(
-        "Monday",
-        Some(Config::default().now(now)),
-    )
-    .unwrap();
+    let (start, end) = parse("Monday", Some(Config::default().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::days(1), end);
 }
@@ -747,11 +735,7 @@ fn monday() {
 fn friday_at_3_pm() {
     let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
     let then = Utc.ymd(1969, 5, 2).and_hms(15, 0, 0);
-    let (start, end) = parse(
-        "Friday at 3 pm",
-        Some(Config::default().now(now)),
-    )
-    .unwrap();
+    let (start, end) = parse("Friday at 3 pm", Some(Config::default().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::hours(1), end);
 }
@@ -760,11 +744,7 @@ fn friday_at_3_pm() {
 fn tuesday_at_3_pm() {
     let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
     let then = Utc.ymd(1969, 4, 29).and_hms(15, 0, 0);
-    let (start, end) = parse(
-        "Tuesday at 3 pm",
-        Some(Config::default().now(now)),
-    )
-    .unwrap();
+    let (start, end) = parse("Tuesday at 3 pm", Some(Config::default().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::hours(1), end);
 }
@@ -773,11 +753,37 @@ fn tuesday_at_3_pm() {
 fn monday_at_3_pm() {
     let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
     let then = Utc.ymd(1969, 5, 5).and_hms(15, 0, 0);
-    let (start, end) = parse(
-        "Monday at 3 pm",
-        Some(Config::default().now(now)),
-    )
-    .unwrap();
+    let (start, end) = parse("Monday at 3 pm", Some(Config::default().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::hours(1), end);
+}
+
+#[test]
+fn just_may() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("May", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn just_april() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1969, 4, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("April", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn just_june() {
+    let now = Utc.ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = Utc.ymd(1968, 6, 1).and_hms(0, 0, 0);
+    let d2 = Utc.ymd(1968, 7, 1).and_hms(0, 0, 0);
+    let (start, end) = parse("June", Some(Config::default().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
 }

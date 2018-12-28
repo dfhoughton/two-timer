@@ -523,32 +523,6 @@ fn handle_specific_time(
     } else {
         Ok((last_moment(), last_moment()))
     };
-    // FIXME
-    // if let Some(t) = moment.name("time") {
-    //     let (hour, minute, second) = time(t);
-    //     let period = if second.is_some() {
-    //         Period::Second
-    //     } else if minute.is_some() {
-    //         Period::Minute
-    //     } else {
-    //         Period::Hour
-    //     };
-    //     let mut t = other_time
-    //         .with_hour(hour)
-    //         .unwrap()
-    //         .with_minute(minute.unwrap_or(0))
-    //         .unwrap()
-    //         .with_second(second.unwrap_or(0))
-    //         .unwrap();
-    //     if before && t > *other_time {
-    //         t = t - Duration::days(1);
-    //     } else if !before && t < *other_time {
-    //         t = t + Duration::days(1);
-    //     }
-    //     return Ok(moment_to_period(t, &period, config));
-    // } else {
-    //     unreachable!();
-    // }
 }
 
 fn handle_one_time(
@@ -605,7 +579,7 @@ fn relative_moment(
         if delta <= 0 {
             delta += 7;
         }
-        let mut d = config.now.date() - Duration::days(delta);
+        let mut d = other_time.date() - Duration::days(delta);
         if !before {
             d = d + Duration::days(7);
         }
@@ -637,8 +611,29 @@ fn relative_moment(
         }
         return moment_to_period(t, &period, config);
     }
-    if let Some(day) = m.name("named_period") {
-        unimplemented!();
+    if let Some(month) = m.name("a_month") {
+        let month = a_month(month);
+        let year = if before {
+            if month > other_time.month() {
+                other_time.year() - 1
+            } else {
+                other_time.year()
+            }
+        } else {
+            if month < other_time.month() {
+                other_time.year() + 1
+            } else {
+                other_time.year()
+            }
+        };
+        let d = Utc.ymd(year, month, 1).and_hms(0, 0, 0);
+        let (d1, d2) = moment_to_period(d, &Period::Month, config);
+        if before && d1 >= *other_time {
+            return moment_to_period(d1.with_year(d1.year() - 1).unwrap(), &Period::Month, config);
+        } else if !before && d2 <= *other_time {
+            return moment_to_period(d1.with_year(d1.year() + 1).unwrap(), &Period::Month, config);
+        }
+        return (d1, d2);
     }
     unreachable!()
 }
