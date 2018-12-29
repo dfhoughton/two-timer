@@ -6,11 +6,11 @@ extern crate lazy_static;
 extern crate chrono;
 use chrono::offset::LocalResult;
 use chrono::{Date, DateTime, Datelike, Duration, TimeZone, Timelike, Utc, Weekday};
-use pidgin::{Grammar, Match, Matcher};
+use pidgin::{Match, Matcher};
 use regex::Regex;
 
 lazy_static! {
-    static ref GRAMMAR: Grammar = grammar!{
+    static ref MATCHER: Matcher = grammar!{
         (?ibBw)
 
         TOP -> r(r"\A") <something> r(r"\z")
@@ -19,7 +19,7 @@ lazy_static! {
         universal => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
         particular => <one_time> | <two_times>
         one_time => <moment_or_period>
-        two_times -> <moment_or_period> <to> <moment_or_period>
+        two_times -> ("from")? <moment_or_period> <to> <moment_or_period>
         to => [["to", "through", "until", "up to", "thru", "till"]] | r("-+")
         moment_or_period => <moment> | <period>
         period => <named_period> | <specific_period>
@@ -50,32 +50,26 @@ lazy_static! {
         am_pm => (?-i) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
         h12 => [(1..=12).into_iter().collect::<Vec<_>>()]
         h24 => [(1..=24).into_iter().collect::<Vec<_>>()]
-        n_date -> <year>    ("/") <n_month> ("/") <n_day>
-        n_date -> <year>    ("-") <n_month> ("-") <n_day>
-        n_date -> <year>    (".") <n_month> (".") <n_day>
-        n_date -> <year>    ("/") <n_day>   ("/") <n_month>
-        n_date -> <year>    ("-") <n_day>   ("-") <n_month>
-        n_date -> <year>    (".") <n_day>   (".") <n_month>
-        n_date -> <n_month> ("/") <n_day>   ("/") <year>
-        n_date -> <n_month> ("-") <n_day>   ("-") <year>
-        n_date -> <n_month> (".") <n_day>   (".") <year>
-        n_date -> <n_day>   ("/") <n_month> ("/") <year>
-        n_date -> <n_day>   ("-") <n_month> ("-") <year>
-        n_date -> <n_day>   (".") <n_month> (".") <year>
+        n_date -> <year>    r("[./-]") <n_month> r("[./-]") <n_day>
+        n_date -> <year>    r("[./-]") <n_day>   r("[./-]") <n_month>
+        n_date -> <n_month> r("[./-]") <n_day>   r("[./-]") <year>
+        n_date -> <n_day>   r("[./-]") <n_month> r("[./-]") <year>
         a_date -> <a_month> <n_day> (",") <year>
         a_date -> <n_day> <a_month> <year>
         a_date -> <a_day> (",") <a_month> <n_day> (",") <year>
-        year => [
-                (100..=3000)
-                    .into_iter()
-                    .collect::<Vec<_>>()
-            ]
-        year => [
+        year => <short_year> | ("-")? <n_year>
+        year -> <suffix_year> <year_suffix>
+        short_year => [
                 (0..=99)
                     .into_iter()
                     .flat_map(|i| vec![format!("'{:02}", i), format!("{:02}", i)])
                     .collect::<Vec<_>>()
             ]
+        n_year => r(r"\b(?:[1-9][0-9]{0,4}|0)\b")
+        suffix_year => r(r"\b[1-9][0-9]{0,4}\b")
+        year_suffix => <ce> | <bce>
+        ce => (?-i) [["ce", "c.e.", "ad", "a.d.", "CE", "C.E.", "AD", "A.D."]]
+        bce => (?-i) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
         n_day => [
                 (1..=31)
                     .into_iter()
@@ -140,10 +134,7 @@ lazy_static! {
                 "ever after",
                 "the last syllable of recorded time",
             ]]
-    };
-}
-lazy_static! {
-    static ref MATCHER: Matcher = GRAMMAR.matcher().unwrap();
+    }.matcher().unwrap();
 }
 
 #[derive(Debug, Clone)]
@@ -156,7 +147,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn default() -> Config {
+    pub fn new() -> Config {
         Config {
             now: Utc::now(),
             monday_starts_week: true,
@@ -170,7 +161,7 @@ impl Config {
         c.now = n;
         c
     }
-    pub fn period(&self, period: Period) -> Config {
+    fn period(&self, period: Period) -> Config {
         let mut c = self.clone();
         c.period = period;
         c
@@ -192,23 +183,36 @@ impl Config {
     }
 }
 
+/// A simple categorization of things that could go wrong.
+///
+/// Every error provides a descriptive string that can be displayed.
+#[derive(Debug, Clone)]
+pub enum TimeError {
+    Parse(String),
+    Misordered(String),
+    ImpossibleDate(String),
+    Weekday(String),
+    NoPayPeriod(String),
+}
+
+///
 pub fn parse(
     phrase: &str,
     config: Option<Config>,
-) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+) -> Result<(DateTime<Utc>, DateTime<Utc>), TimeError> {
     let parse = MATCHER.parse(phrase);
     if parse.is_none() {
-        return Err(format!(
+        return Err(TimeError::Parse(format!(
             "could not parse \"{}\" as a time expression",
             phrase
-        ));
+        )));
     }
     let parse = parse.unwrap();
     if parse.has("universal") {
         return Ok((first_moment(), last_moment()));
     }
     let parse = parse.name("particular").unwrap();
-    let config = config.unwrap_or(Config::default());
+    let config = config.unwrap_or(Config::new());
     if let Some(moment) = parse.name("one_time") {
         return handle_one_time(moment, &config);
     }
@@ -224,7 +228,11 @@ pub fn parse(
                             if d1 <= d2 {
                                 Ok((d1, d2))
                             } else {
-                                Err(format!("{} is after {}", first.as_str(), last.as_str()))
+                                Err(TimeError::Misordered(format!(
+                                    "{} is after {}",
+                                    first.as_str(),
+                                    last.as_str()
+                                )))
                             }
                         }
                         Err(s) => Err(s),
@@ -272,11 +280,29 @@ fn pick_terminus(d1: DateTime<Utc>, d2: DateTime<Utc>) -> DateTime<Utc> {
     }
 }
 
-fn first_moment() -> DateTime<Utc> {
+/// The moment regarded as the beginning of time.
+///
+/// # Examples
+///
+/// ```rust
+/// # extern crate two_timer;
+/// # use two_timer::first_moment;
+/// println!("{}", first_moment()); // -262144-01-01 00:00:00 UTC
+/// ```
+pub fn first_moment() -> DateTime<Utc> {
     chrono::MIN_DATE.and_hms_milli(0, 0, 0, 0)
 }
 
-fn last_moment() -> DateTime<Utc> {
+/// The moment regarded as the end of time.
+///
+/// # Examples
+///
+/// ```rust
+/// # extern crate two_timer;
+/// # use two_timer::last_moment;
+/// println!("{}", last_moment()); // +262143-12-31 23:59:59.999 UTC
+/// ```
+pub fn last_moment() -> DateTime<Utc> {
     chrono::MAX_DATE.and_hms_milli(23, 59, 59, 999)
 }
 
@@ -287,11 +313,14 @@ fn specific(m: &Match) -> bool {
 fn handle_specific_day(
     m: &Match,
     config: &Config,
-) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+) -> Result<(DateTime<Utc>, DateTime<Utc>), TimeError> {
     let now = config.now.clone();
     let mut times = m.all_names("time");
     if times.len() > 1 {
-        return Err(format!("more than one daytime specified in {}", m.as_str()));
+        return Err(TimeError::Parse(format!(
+            "more than one daytime specified in {}",
+            m.as_str()
+        )));
     }
     let time = times.pop();
     if let Some(adverb) = m.name("adverb") {
@@ -303,7 +332,7 @@ fn handle_specific_day(
                 'd' | 'D' => Ok(moment_and_time(&config.period(Period::Day), time)),
                 // tomorrow
                 'm' | 'M' => Ok(moment_and_time(
-                    &Config::default()
+                    &Config::new()
                         .now(now + Duration::days(1))
                         .period(Period::Day),
                     time,
@@ -312,7 +341,7 @@ fn handle_specific_day(
             },
             // yesterday
             'y' | 'Y' => Ok(moment_and_time(
-                &Config::default()
+                &Config::new()
                     .now(now - Duration::days(1))
                     .period(Period::Day),
                 time,
@@ -327,21 +356,18 @@ fn handle_specific_day(
             let day = n_day(date);
             let d_opt = Utc.ymd_opt(year, month, day);
             return match d_opt {
-                LocalResult::None => Err(format!(
+                LocalResult::None => Err(TimeError::ImpossibleDate(format!(
                     "cannot construct UTC date with year {}, month {}, and day {}",
                     year, month, day
-                )),
+                ))),
                 LocalResult::Single(d1) => {
                     let d1 = d1.and_hms(0, 0, 0);
                     Ok(moment_and_time(
-                        &Config::default().now(d1).period(Period::Day),
+                        &Config::new().now(d1).period(Period::Day),
                         time,
                     ))
                 }
-                LocalResult::Ambiguous(_, _) => Err(format!(
-                    "cannot construct unambiguous UTC date with year {}, month {}, and day {}",
-                    year, month, day
-                )),
+                LocalResult::Ambiguous(_, _) => unreachable!(),
             };
         }
         if let Some(date) = date.name("a_date") {
@@ -350,40 +376,37 @@ fn handle_specific_day(
             let day = n_day(date);
             let d_opt = Utc.ymd_opt(year, month, day);
             return match d_opt {
-                LocalResult::None => Err(format!(
+                LocalResult::None => Err(TimeError::ImpossibleDate(format!(
                     "cannot construct UTC date with year {}, month {}, and day {}",
                     year, month, day
-                )),
+                ))),
                 LocalResult::Single(d1) => {
                     if let Some(wd) = date.name("a_day") {
                         let wd = weekday(wd.as_str());
                         if wd == d1.weekday() {
                             let d1 = d1.and_hms(0, 0, 0);
                             Ok(moment_and_time(
-                                &Config::default().now(d1).period(Period::Day),
+                                &Config::new().now(d1).period(Period::Day),
                                 time,
                             ))
                         } else {
-                            Err(format!(
+                            Err(TimeError::Weekday(format!(
                                 "the weekday of year {}, month {}, day {} is not {}",
                                 year,
                                 month,
                                 day,
                                 date.name("a_day").unwrap().as_str()
-                            ))
+                            )))
                         }
                     } else {
                         let d1 = d1.and_hms(0, 0, 0);
                         Ok(moment_and_time(
-                            &Config::default().now(d1).period(Period::Day),
+                            &Config::new().now(d1).period(Period::Day),
                             time,
                         ))
                     }
                 }
-                LocalResult::Ambiguous(_, _) => Err(format!(
-                    "cannot construct unambiguous UTC date with year {}, month {}, and day {}",
-                    year, month, day
-                )),
+                LocalResult::Ambiguous(_, _) => unreachable!(),
             };
         }
         unreachable!();
@@ -394,7 +417,7 @@ fn handle_specific_day(
 fn handle_specific_period(
     moment: &Match,
     config: &Config,
-) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+) -> Result<(DateTime<Utc>, DateTime<Utc>), TimeError> {
     if let Some(moment) = moment.name("month_and_year") {
         let y = year(moment, &config.now);
         let m = a_month(moment);
@@ -403,7 +426,7 @@ fn handle_specific_period(
             LocalResult::Single(d1) => {
                 let d1 = d1.and_hms(0, 0, 0);
                 Ok(moment_and_time(
-                    &Config::default().now(d1).period(Period::Month),
+                    &Config::new().now(d1).period(Period::Month),
                     None,
                 ))
             }
@@ -484,7 +507,9 @@ fn handle_specific_period(
                     };
                     Ok(moment_to_period(d, &Period::PayPeriod, config))
                 } else {
-                    Err(String::from("no pay period start date provided"))
+                    Err(TimeError::NoPayPeriod(String::from(
+                        "no pay period start date provided",
+                    )))
                 }
             }
         };
@@ -531,7 +556,7 @@ impl PeriodModifier {
 fn handle_specific_time(
     moment: &Match,
     config: &Config,
-) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+) -> Result<(DateTime<Utc>, DateTime<Utc>), TimeError> {
     return if moment.has("first_time") {
         Ok(moment_to_period(first_moment(), &config.period, config))
     } else {
@@ -542,7 +567,7 @@ fn handle_specific_time(
 fn handle_one_time(
     moment: &Match,
     config: &Config,
-) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+) -> Result<(DateTime<Utc>, DateTime<Utc>), TimeError> {
     if moment.has("specific_day") {
         return handle_specific_day(moment, config);
     }
@@ -652,7 +677,10 @@ fn relative_moment(
     unreachable!()
 }
 
-fn specific_moment(m: &Match, config: &Config) -> Result<(DateTime<Utc>, DateTime<Utc>), String> {
+fn specific_moment(
+    m: &Match,
+    config: &Config,
+) -> Result<(DateTime<Utc>, DateTime<Utc>), TimeError> {
     if let Some(m) = m.name("specific_day") {
         return handle_specific_day(m, config);
     }
@@ -725,22 +753,29 @@ fn n_month(m: &Match) -> u32 {
 }
 
 fn year(m: &Match, now: &DateTime<Utc>) -> i32 {
-    lazy_static! {
-        static ref YEAR: Regex = Regex::new(r"\A(?:'0?|0)?(\d{1,2})\z").unwrap();
-    }
-    let year = m.name("year").unwrap().as_str();
-    let cap = YEAR.captures(year);
-    if let Some(cap) = cap {
-        // year is assumed to be in the current century
-        let y = cap[1].parse::<i32>().unwrap();
+    let year = m.name("year").unwrap();
+    if let Some(sy) = year.name("short_year") {
+        let y = s_to_n(sy.as_str()) as i32;
         let this_year = now.year() % 100;
         if this_year < y {
             now.year() - this_year - 100 + y
         } else {
             now.year() - this_year + y
         }
+    } else if let Some(suffix) = year.name("year_suffix") {
+        let y = s_to_n(year.name("suffix_year").unwrap().as_str()) as i32;
+        if suffix.has("bce") {
+            1 - y // there is no year 0
+        } else {
+            y
+        }
     } else {
-        year.parse::<i32>().unwrap()
+        let y = s_to_n(year.name("n_year").unwrap().as_str()) as i32;
+        if year.as_str().chars().nth(0).expect("unreachable") == '-' {
+            -y
+        } else {
+            y
+        }
     }
 }
 
@@ -811,7 +846,6 @@ fn moment_to_period(
             );
             (d1, d1 + Duration::seconds(1))
         }
-        Period::Nanosecond => (now, now + Duration::nanoseconds(1)),
         Period::PayPeriod => {
             if let Some(pps) = config.pay_period_start {
                 // find the current pay period start
@@ -831,7 +865,7 @@ fn moment_to_period(
 }
 
 #[derive(Debug, Clone)]
-pub enum Period {
+enum Period {
     Year,
     Month,
     Week,
@@ -839,7 +873,6 @@ pub enum Period {
     Hour,
     Minute,
     Second,
-    Nanosecond,
     PayPeriod,
 }
 
