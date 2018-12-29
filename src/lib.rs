@@ -1,3 +1,180 @@
+/*!
+
+This crate provides a `parse` function to convert English time expressions into a pair
+of timestamps representing a time range. It converts "today" into the first and last
+moments of today, "May 6, 1968" into the first and last moments of that day, "last year"
+into the first and last moments of that year, and so on. It does this even for expressions
+generally interpreted as referring to a point in time, such as "3 PM". In these cases
+the width of the time span varies according to the specificity of the expression. "3 PM" has
+a granularity of an hour, "3:00 PM", of a minute, "3:00:00 PM", of a second. For pointwise
+expression the first moment is the point explicitly named. The `parse` expression actually
+returns a 3-tuple consisting of the two timestamps and whether the expression is literally
+a range -- two time expressions separated by a preposition such as "to", "through", "up to",
+or "until".
+
+# Example
+
+```rust
+extern crate two_timer;
+use two_timer::{parse, Config};
+extern crate chrono;
+use chrono::{Date, TimeZone, Utc};
+
+pub fn main() {
+    let phrases = [
+        "now",
+        "this year",
+        "last Friday",
+        "from now to the end of time",
+        "Ragnarok",
+        "at 3:00 pm today",
+        "5/6/69",
+        "Tuesday, May 6, 1969 at 3:52 AM",
+        "March 15, 44 BC",
+    ];
+    // find the maximum phrase length for pretty formatting
+    let max = phrases
+        .iter()
+        .max_by(|a, b| a.len().cmp(&b.len()))
+        .unwrap()
+        .len();
+    for phrase in phrases.iter() {
+        match parse(phrase, None) {
+            Ok((d1, d2, _)) => println!("{:width$} => {} --- {}", phrase, d1, d2, width = max),
+            Err(e) => println!("{:?}", e),
+        }
+    }
+    let now = Utc.ymd_opt(1066, 10, 14).unwrap().and_hms(12, 30, 15);
+    println!("\nlet \"now\" be some moment during the Battle of Hastings, specifically {}\n", now);
+    let conf = Config::new().now(now);
+    for phrase in phrases.iter() {
+        match parse(phrase, Some(conf.clone())) {
+            Ok((d1, d2, _)) => println!("{:width$} => {} --- {}", phrase, d1, d2, width = max),
+            Err(e) => println!("{:?}", e),
+        }
+    }
+}
+```
+produces
+```text
+now                             => 2018-12-29 21:56:00 UTC --- 2018-12-29 21:57:00 UTC
+this year                       => 2018-01-01 00:00:00 UTC --- 2019-01-01 00:00:00 UTC
+last Friday                     => 2018-12-21 00:00:00 UTC --- 2018-12-22 00:00:00 UTC
+from now to the end of time     => 2018-12-29 21:56:00 UTC --- +262143-12-31 23:59:59.999 UTC
+Ragnarok                        => +262143-12-31 23:59:59.999 UTC --- +262143-12-31 23:59:59.999 UTC
+at 3:00 pm today                => 2018-12-29 15:00:00 UTC --- 2018-12-29 15:01:00 UTC
+5/6/69                          => 1969-05-06 00:00:00 UTC --- 1969-05-07 00:00:00 UTC
+Tuesday, May 6, 1969 at 3:52 AM => 1969-05-06 03:52:00 UTC --- 1969-05-06 03:53:00 UTC
+March 15, 44 BC                 => -0043-03-15 00:00:00 UTC --- -0043-03-16 00:00:00 UTC
+
+let "now" be some moment during the Battle of Hastings, specifically 1066-10-14 12:30:15 UTC
+
+now                             => 1066-10-14 12:30:00 UTC --- 1066-10-14 12:31:00 UTC
+this year                       => 1066-01-01 00:00:00 UTC --- 1067-01-01 00:00:00 UTC
+last Friday                     => 1066-10-05 00:00:00 UTC --- 1066-10-06 00:00:00 UTC
+from now to the end of time     => 1066-10-14 12:30:00 UTC --- +262143-12-31 23:59:59.999 UTC
+Ragnarok                        => +262143-12-31 23:59:59.999 UTC --- +262143-12-31 23:59:59.999 UTC
+at 3:00 pm today                => 1066-10-14 15:00:00 UTC --- 1066-10-14 15:01:00 UTC
+5/6/69                          => 0969-05-06 00:00:00 UTC --- 0969-05-07 00:00:00 UTC
+Tuesday, May 6, 1969 at 3:52 AM => 1969-05-06 03:52:00 UTC --- 1969-05-06 03:53:00 UTC
+March 15, 44 BC                 => -0043-03-15 00:00:00 UTC --- -0043-03-16 00:00:00 UTC
+```
+
+# Relative Times
+
+It is common in English to use time expressions which must be interpreted relative to some
+context. The context may be verb tense, other events in the discourse, or other semantic or
+pragmatic clues. The `two_timer` `parse` function doesn't attempt to infer context perfectly, but
+it does make some attempt to get the context right. So, for instance "last Monday through Friday", said
+on Saturday, will end on a different day from "next Monday through Friday". The general rules
+are
+
+1. a fully-specified expression in a pair will provide the context for the other expression
+2. a relative expression will be interpreted as appropriate given its order -- the second expression
+describes a time after the first
+3. if neither expression is fully-specified, the first will be interpreted relative to "now" and the
+second relative ot the first
+
+The rules of interpretation for relative time expressions in ranges will likely be refined further
+in the future.
+
+# Clock Time
+
+The parse function interprets expressions such as "3:00" as referring to time on a 24 hour clock, so
+"3:00" will be interpreted as "3:00 AM". This is true even in ranges such as "3:00 PM to 4", where the
+more natural interpretation might be "3:00 PM to 4:00 PM".
+
+# Years Near 0
+
+Since it is common to abbreviate years to the last two digits of the century, two-digit
+years will be interpreted as abbreviated unless followed by a suffix such as "B.C.E." or "AD".
+They will be interpreted as the the nearest appropriate *previous* year to the current moment,
+so in 2010 "'11" will be interpreted as 1911, not 2011.
+
+# The Second Time in Ranges
+
+For single expressions, like "this year", "today", "3:00", or "next month", the second of the
+two timestamps is straightforward -- it is the end of the relevant temporal unit. "1971" will
+be interpreted as the first moment of the first day of 1971 through, but excluding, the first
+moment of the first day of 1972, so the second timestamp will be this first excluded moment.
+
+When the parsed expression describes a range, we're really dealing with two potentially overlapping
+pairs of timestamps and the choice of the terminal timestamp gets trickier. The general rule
+will be that if the second interval is shorter than a day, the first timestamp is the first excluded moment,
+so "today to 3:00 PM" means the first moment of the day up to, but excluding, 3:00 PM. If the second
+unit is as big as or larger than a day, which timestamp is used varies according to the preposition.
+"This week up to Friday" excludes all of Friday. "This week through Friday" includes all of Friday.
+Prepositions are assumed to fall into either the "to" class or the "through" class. You may also use
+a series of dashes as a synonym for "through", so "this week - fri" is equivalent to "this week through Friday".
+For the most current list of prepositions in each class, consult the grammar used for parsing, but
+as of the moment, these are the rules:
+
+```text
+        up_to => [["to", "until", "up to", "till"]]
+        through => [["up through", "through", "thru"]] | r("-+")
+```
+
+# Pay Periods
+
+I'm writing this library in anticipation of, for the sake of amusement, rewriting [JobLog](https://metacpan.org/pod/App::JobLog)
+in Rust. This means I need the time expressions parsed to include pay periods. Pay periods, though,
+are defined relative to some reference date -- a particular Sunday, say -- and have a variable period.
+`two_timer`, and JobLog, assume pay periods are of a fixed length and tile the timeline without overlap, so a
+pay period of a calendrical month is problematic.
+
+If you need to interpret "last pay period", say, you will need to specify when this pay period began, or
+when some pay period began or will begin, and a pay period length in days. The `parse` function has a second
+optional argument, a `Config` object, whose chief function outside of testing is to provide this information. So,
+for example, you could do this:
+
+```rust
+# extern crate two_timer;
+# use two_timer::{parse, Config};
+# extern crate chrono;
+# use chrono::{Date, TimeZone, Utc};
+let (reference_time, _, _) = parse("5/6/69", None).unwrap();
+let config = Config::new().pay_period_start(Some(reference_time.date()));
+let (t1, t2, _) = parse("next pay period", Some(config)).unwrap();
+```
+
+# Ambiguous Year Formats
+
+`two_timer` will try various year-month-day permutations until one of them parses given that days are in the range 1-31 and
+months, 1-12. This is the order in which it tries these permutations:
+
+1. year/month/day
+2. year/day/month
+3. month/day/year
+4. day/month/year
+
+The potential unit separators are `/`, `.`, and `-`. Whitespace is optional.
+
+# Timezones
+
+At the moment `two_timer` only knows about UTC time. Sorry about that.
+
+*/
+
 #![recursion_limit = "1024"]
 #[macro_use]
 extern crate pidgin;
@@ -20,7 +197,9 @@ lazy_static! {
         particular => <one_time> | <two_times>
         one_time => <moment_or_period>
         two_times -> ("from")? <moment_or_period> <to> <moment_or_period>
-        to => [["to", "through", "until", "up to", "thru", "till"]] | r("-+")
+        to => <up_to> | <through>
+        up_to => [["to", "until", "up to", "till"]]
+        through => [["up through", "through", "thru"]] | r("-+")
         moment_or_period => <moment> | <period>
         period => <named_period> | <specific_period>
         specific_period => <modified_period> | <month_and_year>
@@ -137,6 +316,8 @@ lazy_static! {
     }.matcher().unwrap();
 }
 
+/// A collection of parameters that can influence the interpretation
+/// of time expressions.
 #[derive(Debug, Clone)]
 pub struct Config {
     now: DateTime<Utc>,
@@ -147,6 +328,7 @@ pub struct Config {
 }
 
 impl Config {
+    /// Constructs an expression with the default parameters.
     pub fn new() -> Config {
         Config {
             now: Utc::now(),
@@ -156,6 +338,8 @@ impl Config {
             pay_period_start: None,
         }
     }
+    /// Returns a copy of the configuration parameters with the "now" moment
+    /// set to the parameter supplied.
     pub fn now(&self, n: DateTime<Utc>) -> Config {
         let mut c = self.clone();
         c.now = n;
@@ -166,16 +350,27 @@ impl Config {
         c.period = period;
         c
     }
+    /// Returns a copy of the configuration parameters with whether
+    /// Monday is regarded as the first day of the week set to the parameter
+    /// supplied. By default Monday *is* regarded as the first day. If this
+    /// parameter is set to `false`, Sunday will be regarded as the first weekday.
     pub fn monday_starts_week(&self, monday_starts_week: bool) -> Config {
         let mut c = self.clone();
         c.monday_starts_week = monday_starts_week;
         c
     }
+    /// Returns a copy of the configuration parameters with the pay period
+    /// length in days set to the parameter supplied. The default pay period
+    /// length is 7 days.
     pub fn pay_period_length(&self, pay_period_length: u32) -> Config {
         let mut c = self.clone();
         c.pay_period_length = pay_period_length;
         c
     }
+    /// Returns a copy of the configuration parameters with the reference start
+    /// date for a pay period set to the parameter supplied. By default this date
+    /// is undefined. Unless it is defined, expressions containing the phrase "pay period"
+    /// or "pp" cannot be interpreted.
     pub fn pay_period_start(&self, pay_period_start: Option<Date<Utc>>) -> Config {
         let mut c = self.clone();
         c.pay_period_start = pay_period_start;
@@ -188,18 +383,40 @@ impl Config {
 /// Every error provides a descriptive string that can be displayed.
 #[derive(Debug, Clone)]
 pub enum TimeError {
+    /// The time expression cannot be parsed by the available grammar.
     Parse(String),
+    /// The time expression consists of a time range and the end of the range is before
+    /// the beginning.
     Misordered(String),
+    /// The time expression specifies an impossible date, such as the 31st of September.
     ImpossibleDate(String),
+    /// The time expression specifies a weekday different from that required by the rest
+    /// of the expression, such as Wednesday, May 5, 1969, which was a Tuesday.
     Weekday(String),
+    /// The time expression refers to a pay period, but the starting date of a reference
+    /// pay period has not been provided, so the pay period is undefined.
     NoPayPeriod(String),
 }
 
+/// Converts a time expression into a pair or timestamps and a boolean indicating whether
+/// the expression was literally a range, such as "9 to 11", as opposed to "9 AM", say.
+/// 
+/// The second parameter is an optional `Config` object. In general you will not need to
+/// use this except in testing or in the interpretation of pay periods.
 ///
+/// # Examples
+///
+/// ```rust
+/// # extern crate two_timer;
+/// # use two_timer::{parse, Config};
+/// # extern crate chrono;
+/// # use chrono::{Date, TimeZone, Utc};
+/// let (reference_time, _, _) = parse("5/6/69", None).unwrap();
+/// ```
 pub fn parse(
     phrase: &str,
     config: Option<Config>,
-) -> Result<(DateTime<Utc>, DateTime<Utc>), TimeError> {
+) -> Result<(DateTime<Utc>, DateTime<Utc>, bool), TimeError> {
     let parse = MATCHER.parse(phrase);
     if parse.is_none() {
         return Err(TimeError::Parse(format!(
@@ -209,7 +426,7 @@ pub fn parse(
     }
     let parse = parse.unwrap();
     if parse.has("universal") {
-        return Ok((first_moment(), last_moment()));
+        return Ok((first_moment(), last_moment(), false));
     }
     let parse = parse.name("particular").unwrap();
     let config = config.unwrap_or(Config::new());
@@ -219,14 +436,15 @@ pub fn parse(
     if let Some(two_times) = parse.name("two_times") {
         let first = &two_times.children().unwrap()[0];
         let last = &two_times.children().unwrap()[2];
+        let is_through = two_times.has("through");
         if specific(first) {
             if specific(last) {
                 return match specific_moment(first, &config) {
                     Ok((d1, _)) => match specific_moment(last, &config) {
                         Ok((d2, d3)) => {
-                            let d2 = pick_terminus(d2, d3);
+                            let d2 = pick_terminus(d2, d3, is_through);
                             if d1 <= d2 {
-                                Ok((d1, d2))
+                                Ok((d1, d2, true))
                             } else {
                                 Err(TimeError::Misordered(format!(
                                     "{} is after {}",
@@ -243,8 +461,8 @@ pub fn parse(
                 return match specific_moment(first, &config) {
                     Ok((d1, _)) => {
                         let (d2, d3) = relative_moment(last, &config, &d1, false);
-                        let d2 = pick_terminus(d2, d3);
-                        Ok((d1, d2))
+                        let d2 = pick_terminus(d2, d3, is_through);
+                        Ok((d1, d2, true))
                     }
                     Err(s) => Err(s),
                 };
@@ -252,9 +470,9 @@ pub fn parse(
         } else if specific(last) {
             return match specific_moment(last, &config) {
                 Ok((d2, d3)) => {
-                    let d2 = pick_terminus(d2, d3);
+                    let d2 = pick_terminus(d2, d3, is_through);
                     let (d1, _) = relative_moment(first, &config, &d2, true);
-                    Ok((d1, d2))
+                    Ok((d1, d2, true))
                 }
                 Err(s) => Err(s),
             };
@@ -263,8 +481,8 @@ pub fn parse(
             let (d1, _) = relative_moment(first, &config, &config.now, true);
             // the second moment is necessarily after the first momentß
             let (d2, d3) = relative_moment(last, &config, &d1, false);
-            let d2 = pick_terminus(d2, d3);
-            return Ok((d1, d2));
+            let d2 = pick_terminus(d2, d3, is_through);
+            return Ok((d1, d2, true));
         }
     }
     unreachable!();
@@ -272,11 +490,13 @@ pub fn parse(
 
 // for the end time, if the span is less than a day, use the first, otherwise use the second
 // e.g., Monday through Friday at 3 PM should end at 3 PM, but Monday through Friday should end at the end of Friday
-fn pick_terminus(d1: DateTime<Utc>, d2: DateTime<Utc>) -> DateTime<Utc> {
+fn pick_terminus(d1: DateTime<Utc>, d2: DateTime<Utc>, through: bool) -> DateTime<Utc> {
     if d1.day() == d2.day() && d1.month() == d2.month() && d1.year() == d2.year() {
         d1
-    } else {
+    } else if through {
         d2
+    } else {
+        d1
     }
 }
 
@@ -567,17 +787,20 @@ fn handle_specific_time(
 fn handle_one_time(
     moment: &Match,
     config: &Config,
-) -> Result<(DateTime<Utc>, DateTime<Utc>), TimeError> {
-    if moment.has("specific_day") {
-        return handle_specific_day(moment, config);
+) -> Result<(DateTime<Utc>, DateTime<Utc>, bool), TimeError> {
+    let r = if moment.has("specific_day") {
+        handle_specific_day(moment, config)
+    } else if let Some(moment) = moment.name("specific_period") {
+        handle_specific_period(moment, config)
+    } else if let Some(moment) = moment.name("specific_time") {
+        handle_specific_time(moment, config)
+    } else {
+        Ok(relative_moment(moment, config, &config.now, true))
+    };
+    match r {
+        Ok((d1, d2)) => Ok((d1, d2, false)),
+        Err(e) => Err(e),
     }
-    if let Some(moment) = moment.name("specific_period") {
-        return handle_specific_period(moment, config);
-    }
-    if let Some(moment) = moment.name("specific_time") {
-        return handle_specific_time(moment, config);
-    }
-    return Ok(relative_moment(moment, config, &config.now, true));
 }
 
 // add time to a date
