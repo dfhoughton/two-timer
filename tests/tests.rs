@@ -3,7 +3,7 @@ extern crate two_timer;
 use two_timer::{parse, Config};
 extern crate chrono;
 use chrono::naive::NaiveDate;
-use chrono::{Duration, Local, TimeZone, Utc};
+use chrono::{Duration, Local};
 
 #[test]
 fn always() {
@@ -972,6 +972,48 @@ fn last_weekend_on_sunday_when_sunday_starts_week() {
 #[test]
 fn next_weekend_on_sunday_when_sunday_starts_week() {
     let now = NaiveDate::from_ymd(1969, 5, 11).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
+    let d2 = NaiveDate::from_ymd(1969, 5, 19).and_hms(0, 0, 0);
+    let (start, end, _) = parse(
+        "next weekend",
+        Some(Config::new().now(now).monday_starts_week(false)),
+    )
+    .unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn this_weekend_on_saturday_when_sunday_starts_week() {
+    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let (start, end, _) = parse(
+        "this weekend",
+        Some(Config::new().now(now).monday_starts_week(false)),
+    )
+    .unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn last_weekend_on_saturday_when_sunday_starts_week() {
+    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 5, 3).and_hms(0, 0, 0);
+    let d2 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let (start, end, _) = parse(
+        "last weekend",
+        Some(Config::new().now(now).monday_starts_week(false)),
+    )
+    .unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn next_weekend_on_saturday_when_sunday_starts_week() {
+    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
     let d1 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 19).and_hms(0, 0, 0);
     let (start, end, _) = parse(

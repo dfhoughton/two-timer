@@ -180,7 +180,7 @@ extern crate pidgin;
 extern crate lazy_static;
 extern crate chrono;
 use chrono::naive::{NaiveDate, NaiveDateTime};
-use chrono::{Date, DateTime, Datelike, Duration, Local, TimeZone, Timelike, Weekday};
+use chrono::{Datelike, Duration, Local, Timelike, Weekday};
 use pidgin::{Match, Matcher};
 use regex::Regex;
 
