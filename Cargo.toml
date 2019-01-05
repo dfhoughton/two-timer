@@ -1,6 +1,6 @@
 [package]
 name = "two_timer"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["dfhoughton <dfhoughton@gmail.com>"]
 description="parser for English time expressions"
 homepage="https://github.com/dfhoughton/two-timer"
