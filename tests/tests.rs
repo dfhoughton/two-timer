@@ -852,6 +852,24 @@ fn april_3_25_ad() {
 }
 
 #[test]
+fn april_3_25bc() {
+    let d1 = NaiveDate::from_ymd(-24, 4, 3).and_hms(0, 0, 0);
+    let d2 = d1 + Duration::days(1);
+    let (start, end, _) = parse("April 3, 25BC", None).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn april_3_25ad() {
+    let d1 = NaiveDate::from_ymd(25, 4, 3).and_hms(0, 0, 0);
+    let d2 = d1 + Duration::days(1);
+    let (start, end, _) = parse("April 3, 25AD", None).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
 fn this_weekend() {
     let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
     let d1 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);

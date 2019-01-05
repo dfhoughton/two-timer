@@ -15,7 +15,7 @@ edition = "2018"
 panic = "abort"
 
 [dependencies]
-pidgin = "0.2"
+pidgin = "0.3"
 lazy_static = "1.2"
 chrono = "0.4"
 regex = "1"

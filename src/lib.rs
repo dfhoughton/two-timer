@@ -181,11 +181,11 @@ extern crate lazy_static;
 extern crate chrono;
 use chrono::naive::{NaiveDate, NaiveDateTime};
 use chrono::{Datelike, Duration, Local, Timelike, Weekday};
-use pidgin::{Match, Matcher};
+use pidgin::{Grammar, Match, Matcher};
 use regex::Regex;
 
 lazy_static! {
-    static ref MATCHER: Matcher = grammar!{
+    pub static ref GRAMMAR: Grammar = grammar!{
         (?ibBw)
 
         TOP -> r(r"\A") <something> r(r"\z")
@@ -243,10 +243,10 @@ lazy_static! {
                     .collect::<Vec<_>>()
             ]
         n_year => r(r"\b(?:[1-9][0-9]{0,4}|0)\b")
-        suffix_year => r(r"\b[1-9][0-9]{0,4}\b")
+        suffix_year => r(r"\b[1-9][0-9]{0,4}")
         year_suffix => <ce> | <bce>
-        ce => (?-i) [["ce", "c.e.", "ad", "a.d.", "CE", "C.E.", "AD", "A.D."]]
-        bce => (?-i) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
+        ce => (?-ib) [["ce", "c.e.", "ad", "a.d.", "CE", "C.E.", "AD", "A.D."]]
+        bce => (?-ib) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
         n_day => [
                 (1..=31)
                     .into_iter()
@@ -311,7 +311,10 @@ lazy_static! {
                 "ever after",
                 "the last syllable of recorded time",
             ]]
-    }.matcher().unwrap();
+    };
+}
+lazy_static! {
+    pub static ref MATCHER: Matcher = GRAMMAR.matcher().unwrap();
 }
 
 /// A collection of parameters that can influence the interpretation
