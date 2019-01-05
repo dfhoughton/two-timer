@@ -57,27 +57,27 @@ pub fn main() {
 ```
 produces
 ```text
-now                             => 2018-12-29 21:56:00 UTC --- 2018-12-29 21:57:00 UTC
-this year                       => 2018-01-01 00:00:00 UTC --- 2019-01-01 00:00:00 UTC
-last Friday                     => 2018-12-21 00:00:00 UTC --- 2018-12-22 00:00:00 UTC
-from now to the end of time     => 2018-12-29 21:56:00 UTC --- +262143-12-31 23:59:59.999 UTC
-Ragnarok                        => +262143-12-31 23:59:59.999 UTC --- +262143-12-31 23:59:59.999 UTC
-at 3:00 pm today                => 2018-12-29 15:00:00 UTC --- 2018-12-29 15:01:00 UTC
-5/6/69                          => 1969-05-06 00:00:00 UTC --- 1969-05-07 00:00:00 UTC
-Tuesday, May 6, 1969 at 3:52 AM => 1969-05-06 03:52:00 UTC --- 1969-05-06 03:53:00 UTC
-March 15, 44 BC                 => -0043-03-15 00:00:00 UTC --- -0043-03-16 00:00:00 UTC
+now                             => 2019-01-05 12:56:00 --- 2019-01-05 12:57:00
+this year                       => 2019-01-01 00:00:00 --- 2020-01-01 00:00:00
+last Friday                     => 2018-12-28 00:00:00 --- 2018-12-29 00:00:00
+from now to the end of time     => 2019-01-05 12:56:00 --- +262143-12-31 23:59:59.999
+Ragnarok                        => +262143-12-31 23:59:59.999 --- +262143-12-31 23:59:59.999
+at 3:00 pm today                => 2019-01-05 15:00:00 --- 2019-01-05 15:01:00
+5/6/69                          => 1969-05-06 00:00:00 --- 1969-05-07 00:00:00
+Tuesday, May 6, 1969 at 3:52 AM => 1969-05-06 03:52:00 --- 1969-05-06 03:53:00
+March 15, 44 BC                 => -0043-03-15 00:00:00 --- -0043-03-16 00:00:00
 
-let "now" be some moment during the Battle of Hastings, specifically 1066-10-14 12:30:15 UTC
+let "now" be some moment during the Battle of Hastings, specifically 1066-10-14 12:30:15
 
-now                             => 1066-10-14 12:30:00 UTC --- 1066-10-14 12:31:00 UTC
-this year                       => 1066-01-01 00:00:00 UTC --- 1067-01-01 00:00:00 UTC
-last Friday                     => 1066-10-05 00:00:00 UTC --- 1066-10-06 00:00:00 UTC
-from now to the end of time     => 1066-10-14 12:30:00 UTC --- +262143-12-31 23:59:59.999 UTC
-Ragnarok                        => +262143-12-31 23:59:59.999 UTC --- +262143-12-31 23:59:59.999 UTC
-at 3:00 pm today                => 1066-10-14 15:00:00 UTC --- 1066-10-14 15:01:00 UTC
-5/6/69                          => 0969-05-06 00:00:00 UTC --- 0969-05-07 00:00:00 UTC
-Tuesday, May 6, 1969 at 3:52 AM => 1969-05-06 03:52:00 UTC --- 1969-05-06 03:53:00 UTC
-March 15, 44 BC                 => -0043-03-15 00:00:00 UTC --- -0043-03-16 00:00:00 UTC
+now                             => 1066-10-14 12:30:00 --- 1066-10-14 12:31:00
+this year                       => 1066-01-01 00:00:00 --- 1067-01-01 00:00:00
+last Friday                     => 1066-10-05 00:00:00 --- 1066-10-06 00:00:00
+from now to the end of time     => 1066-10-14 12:30:00 --- +262143-12-31 23:59:59.999
+Ragnarok                        => +262143-12-31 23:59:59.999 --- +262143-12-31 23:59:59.999
+at 3:00 pm today                => 1066-10-14 15:00:00 --- 1066-10-14 15:01:00
+5/6/69                          => 0969-05-06 00:00:00 --- 0969-05-07 00:00:00
+Tuesday, May 6, 1969 at 3:52 AM => 1969-05-06 03:52:00 --- 1969-05-06 03:53:00
+March 15, 44 BC                 => -0043-03-15 00:00:00 --- -0043-03-16 00:00:00
 ```
 
 # Relative Times
@@ -150,8 +150,6 @@ for example, you could do this:
 ```rust
 # extern crate two_timer;
 # use two_timer::{parse, Config};
-# extern crate chrono;
-# use chrono::{Date, TimeZone, Utc};
 let (reference_time, _, _) = parse("5/6/69", None).unwrap();
 let config = Config::new().pay_period_start(Some(reference_time.date()));
 let (t1, t2, _) = parse("next pay period", Some(config)).unwrap();
@@ -171,7 +169,7 @@ The potential unit separators are `/`, `.`, and `-`. Whitespace is optional.
 
 # Timezones
 
-At the moment `two_timer` only knows about UTC time. Sorry about that.
+At the moment `two_timer` only produces "naive" times. Sorry about that.
 
 */
 
@@ -409,8 +407,6 @@ pub enum TimeError {
 /// ```rust
 /// # extern crate two_timer;
 /// # use two_timer::{parse, Config};
-/// # extern crate chrono;
-/// # use chrono::{Date, TimeZone, Utc};
 /// let (reference_time, _, _) = parse("5/6/69", None).unwrap();
 /// ```
 pub fn parse(
@@ -507,7 +503,7 @@ fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDa
 /// ```rust
 /// # extern crate two_timer;
 /// # use two_timer::first_moment;
-/// println!("{}", first_moment()); // -262144-01-01 00:00:00 UTC
+/// println!("{}", first_moment()); // -262144-01-01 00:00:00
 /// ```
 pub fn first_moment() -> NaiveDateTime {
     chrono::naive::MIN_DATE.and_hms_milli(0, 0, 0, 0)
@@ -520,7 +516,7 @@ pub fn first_moment() -> NaiveDateTime {
 /// ```rust
 /// # extern crate two_timer;
 /// # use two_timer::last_moment;
-/// println!("{}", last_moment()); // +262143-12-31 23:59:59.999 UTC
+/// println!("{}", last_moment()); // +262143-12-31 23:59:59.999
 /// ```
 pub fn last_moment() -> NaiveDateTime {
     chrono::naive::MAX_DATE.and_hms_milli(23, 59, 59, 999)
@@ -577,7 +573,7 @@ fn handle_specific_day(
             let d_opt = NaiveDate::from_ymd_opt(year, month, day);
             return match d_opt {
                 None => Err(TimeError::ImpossibleDate(format!(
-                    "cannot construct UTC date with year {}, month {}, and day {}",
+                    "cannot construct date with year {}, month {}, and day {}",
                     year, month, day
                 ))),
                 Some(d1) => {
@@ -596,7 +592,7 @@ fn handle_specific_day(
             let d_opt = NaiveDate::from_ymd_opt(year, month, day);
             return match d_opt {
                 None => Err(TimeError::ImpossibleDate(format!(
-                    "cannot construct UTC date with year {}, month {}, and day {}",
+                    "cannot construct date with year {}, month {}, and day {}",
                     year, month, day
                 ))),
                 Some(d1) => {
