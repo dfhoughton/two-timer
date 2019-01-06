@@ -185,6 +185,9 @@ use pidgin::{Grammar, Match, Matcher};
 use regex::Regex;
 
 lazy_static! {
+    // making this public is useful for testing, but best to keep it hidden to 
+    // limit complexity and commitment
+    #[doc(hidden)]
     pub static ref GRAMMAR: Grammar = grammar!{
         (?ibBw)
 
