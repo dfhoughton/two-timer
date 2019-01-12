@@ -185,7 +185,7 @@ use pidgin::{Grammar, Match, Matcher};
 use regex::Regex;
 
 lazy_static! {
-    // making this public is useful for testing, but best to keep it hidden to 
+    // making this public is useful for testing, but best to keep it hidden to
     // limit complexity and commitment
     #[doc(hidden)]
     pub static ref GRAMMAR: Grammar = grammar!{
@@ -400,6 +400,19 @@ pub enum TimeError {
     /// The time expression refers to a pay period, but the starting date of a reference
     /// pay period has not been provided, so the pay period is undefined.
     NoPayPeriod(String),
+}
+
+impl TimeError {
+    /// Extracts error message.
+    pub fn msg(&self) -> &str {
+        match self {
+            TimeError::Parse(s) => s.as_ref(),
+            TimeError::Misordered(s) => s.as_ref(),
+            TimeError::ImpossibleDate(s) => s.as_ref(),
+            TimeError::Weekday(s) => s.as_ref(),
+            TimeError::NoPayPeriod(s) => s.as_ref(),
+        }
+    }
 }
 
 /// Converts a time expression into a pair or timestamps and a boolean indicating whether
