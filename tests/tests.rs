@@ -17,7 +17,7 @@ fn always() {
         "from beginning to end",
         "from the beginning to the end",
     ]
-        .iter()
+    .iter()
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(alpha, start);
@@ -74,7 +74,7 @@ fn day_5_6_69_at_3_30_pm() {
         "at 15:30 on 5-6-69",
         "15:30 on 5-6-69",
     ]
-        .iter()
+    .iter()
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
@@ -91,7 +91,7 @@ fn day_5_6_69_at_3_pm() {
         "at 15 on 5-6-69",
         "15 on 5-6-69",
     ]
-        .iter()
+    .iter()
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
@@ -108,7 +108,7 @@ fn day_5_6_69_at_3_30_00_pm() {
         "at 15:30:00 on 5-6-69",
         "15:30:00 on 5-6-69",
     ]
-        .iter()
+    .iter()
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
@@ -125,7 +125,7 @@ fn day_5_6_69_at_3_30_01_pm() {
         "at 15:30:01 on 5-6-69",
         "15:30:01 on 5-6-69",
     ]
-        .iter()
+    .iter()
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
@@ -142,7 +142,7 @@ fn day_5_6_69_at_3_30_01_am() {
         "at 3:30:01 on 5-6-69",
         "3:30:01 on 5-6-69",
     ]
-        .iter()
+    .iter()
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
@@ -229,7 +229,7 @@ fn alphabetic_5_6_69() {
         "T, May 6, '69",
         "T, May 6, 69",
     ]
-        .iter()
+    .iter()
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
@@ -314,7 +314,7 @@ fn ymd_5_31_69() {
         "'69/31/05",
         "'69.31.05",
     ]
-        .iter()
+    .iter()
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
@@ -667,7 +667,7 @@ fn dawn_of_time() {
         "the big bang",
         "the birth of the universe",
     ]
-        .iter()
+    .iter()
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
@@ -698,7 +698,7 @@ fn the_crack_of_doom() {
         "ever after",
         "the last syllable of recorded time",
     ]
-        .iter()
+    .iter()
     {
         let (_, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, end);
@@ -1041,4 +1041,16 @@ fn next_weekend_on_saturday_when_sunday_starts_week() {
     .unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
+}
+
+#[test]
+fn regression_12pm() {
+    let d1 = NaiveDate::from_ymd(2018, 5, 21).and_hms(0, 0, 0);
+    let d2 = NaiveDate::from_ymd(2018, 5, 21).and_hms(1, 0, 0);
+    if let Ok((start, end, _)) = parse("12 pm on May 21, 2018", None) {
+        assert_eq!(d1, start);
+        assert_eq!(d2, end);
+    } else {
+        assert!(false);
+    }
 }

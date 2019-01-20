@@ -8,3 +8,5 @@
 * removing some documentation
 ## 1.0.2
 * added `msg` method to `TimeError`
+## 1.0.3
+* fixed "12 pm" bug

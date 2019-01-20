@@ -972,12 +972,17 @@ fn time(m: &Match) -> (u32, Option<u32>, Option<u32>) {
     let hour = if let Some(hour_24) = m.name("hour_24") {
         s_to_n(hour_24.name("h24").unwrap().as_str())
     } else if let Some(hour_12) = m.name("hour_12") {
-        let hour = s_to_n(hour_12.name("h12").unwrap().as_str());
-        if let Some(am_pm) = m.name("am_pm") {
+        let mut hour = s_to_n(hour_12.name("h12").unwrap().as_str());
+        hour = if let Some(am_pm) = m.name("am_pm") {
             match am_pm.as_str().chars().nth(0).expect("empty string") {
                 'a' | 'A' => hour,
                 _ => hour + 12,
             }
+        } else {
+            hour
+        };
+        if hour == 24 {
+            0
         } else {
             hour
         }
