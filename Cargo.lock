@@ -108,7 +108,7 @@ dependencies = [
 
 [[package]]
 name = "two_timer"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",

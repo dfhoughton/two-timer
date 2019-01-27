@@ -10,3 +10,5 @@
 * added `msg` method to `TimeError`
 ## 1.0.3
 * fixed "12 pm" bug
+## 1.0.4
+* added `<year>` pattern

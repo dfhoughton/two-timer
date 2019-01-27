@@ -203,7 +203,7 @@ lazy_static! {
         through => [["up through", "through", "thru"]] | r("-+")
         moment_or_period => <moment> | <period>
         period => <named_period> | <specific_period>
-        specific_period => <modified_period> | <month_and_year>
+        specific_period => <modified_period> | <month_and_year> | <year>
         month_and_year -> <a_month> <year>
         named_period => <a_day> | <a_month>
         modified_period -> <modifier> <modifiable_period>
@@ -216,6 +216,18 @@ lazy_static! {
         relative_day => <a_day>
         adverb => [["now", "today", "tomorrow", "yesterday"]]
         date_with_year => <n_date> | <a_date>
+
+        n_date -> <year>    r("[./-]") <n_month> r("[./-]") <n_day>
+        n_date -> <year>    r("[./-]") <n_day>   r("[./-]") <n_month>
+        n_date -> <n_month> r("[./-]") <n_day>   r("[./-]") <year>
+        n_date -> <n_day>   r("[./-]") <n_month> r("[./-]") <year>
+
+        a_date -> <day_prefix>? <a_month> <o_n_day> (",") <year>
+        a_date -> <day_prefix>? <n_day> <a_month> <year>
+        a_date -> <day_prefix>? ("the") <o_day> ("of") <a_month> <year>
+
+        day_prefix => <a_day> (",")
+        o_n_day => <n_day> | <o_day>
         at_time -> ("at") <time>
         at_time_on -> ("at")? <time> ("on")?
         time -> <hour_12> <am_pm>? | <hour_24>
@@ -230,13 +242,6 @@ lazy_static! {
         am_pm => (?-i) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
         h12 => [(1..=12).into_iter().collect::<Vec<_>>()]
         h24 => [(1..=24).into_iter().collect::<Vec<_>>()]
-        n_date -> <year>    r("[./-]") <n_month> r("[./-]") <n_day>
-        n_date -> <year>    r("[./-]") <n_day>   r("[./-]") <n_month>
-        n_date -> <n_month> r("[./-]") <n_day>   r("[./-]") <year>
-        n_date -> <n_day>   r("[./-]") <n_month> r("[./-]") <year>
-        a_date -> <a_month> <n_day> (",") <year>
-        a_date -> <n_day> <a_month> <year>
-        a_date -> <a_day> (",") <a_month> <n_day> (",") <year>
         year => <short_year> | ("-")? <n_year>
         year -> <suffix_year> <year_suffix>
         short_year => [
@@ -314,6 +319,74 @@ lazy_static! {
                 "ever after",
                 "the last syllable of recorded time",
             ]]
+        o_day => <n_ordinal> | <a_ordinal> | <roman>
+        n_ordinal => [[
+                "1st",
+                "2nd",
+                "3rd",
+                "4th",
+                "5th",
+                "6th",
+                "7th",
+                "8th",
+                "9th",
+                "10th",
+                "11th",
+                "12th",
+                "13th",
+                "14th",
+                "15th",
+                "16th",
+                "17th",
+                "18th",
+                "19th",
+                "20th",
+                "21st",
+                "22nd",
+                "23rd",
+                "24th",
+                "25th",
+                "26th",
+                "27th",
+                "28th",
+                "29th",
+                "30th",
+                "31st",
+            ]]
+        a_ordinal => [[
+                "first",
+                "second",
+                "third",
+                "fourth",
+                "fifth",
+                "sixth",
+                "seventh",
+                "eighth",
+                "ninth",
+                "tenth",
+                "eleventh",
+                "twelfth",
+                "thirteenth",
+                "fourteenth",
+                "fifteenth",
+                "sixteenth",
+                "seventeenth",
+                "eighteenth",
+                "nineteenth",
+                "twentieth",
+                "twenty-first",
+                "twenty-second",
+                "twenty-third",
+                "twenty-fourth",
+                "twenty-fifth",
+                "twenty-sixth",
+                "twenty-seventh",
+                "twenty-eighth",
+                "twenty-ninth",
+                "thirtieth",
+                "thirty-first"
+            ]]
+        roman => [["nones", "ides", "kalends"]]
     };
 }
 lazy_static! {
@@ -607,7 +680,11 @@ fn handle_specific_day(
         if let Some(date) = date.name("a_date") {
             let year = year(date, &now);
             let month = a_month(date);
-            let day = n_day(date);
+            let day = if date.has("n_day") {
+                n_day(date)
+            } else {
+                o_day(date, month)
+            };
             let d_opt = NaiveDate::from_ymd_opt(year, month, day);
             return match d_opt {
                 None => Err(TimeError::ImpossibleDate(format!(
@@ -756,6 +833,14 @@ fn handle_specific_period(
                 }
             }
         };
+    }
+    if let Some(moment) = moment.name("year") {
+        let year = year(moment, &config.now);
+        return Ok(moment_to_period(
+            NaiveDate::from_ymd(year, 1, 1).and_hms(0, 0, 0),
+            &Period::Year,
+            config,
+        ));
     }
     unreachable!()
 }
@@ -1046,6 +1131,130 @@ fn s_to_n(s: &str) -> u32 {
 
 fn n_day(m: &Match) -> u32 {
     m.name("n_day").unwrap().as_str().parse::<u32>().unwrap()
+}
+
+fn o_day(m: &Match, month: u32) -> u32 {
+    let m = m.name("o_day").unwrap();
+    let s = m.as_str();
+    if m.has("a_ordinal") {
+        ordinal(s)
+    } else if m.has("n_ordinal") {
+        s[0..s.len() - 2].parse::<u32>().unwrap()
+    } else {
+        // roman
+        match s.chars().nth(0).expect("empty string") {
+            'n' | 'N' => {
+                // nones
+                match month {
+                    3 | 5 | 7 | 10 => 7, // March, May, July, October
+                    _ => 5,
+                }
+            }
+            'i' | 'I' => {
+                // ides
+                match month {
+                    3 | 5 | 7 | 10 => 15, // March, May, July, October
+                    _ => 13,
+                }
+            }
+            _ => 1, // kalends
+        }
+    }
+}
+
+// converts the ordinals up to thirty-first
+fn ordinal(s: &str) -> u32 {
+    match s.chars().nth(0).expect("empty string") {
+        'f' | 'F' => {
+            match s.chars().nth(1).expect("too short") {
+                'i' | 'I' => {
+                    match s.chars().nth(2).expect("too short") {
+                        'r' | 'R' => 1, // first
+                        _ => {
+                            if s.len() == 5 {
+                                5 // fifth
+                            } else {
+                                15 // fifteenth
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    if s.len() == 6 {
+                        4 // fourth
+                    } else {
+                        14 // fourteenth
+                    }
+                }
+            }
+        }
+        's' | 'S' => {
+            match s.chars().nth(1).expect("too short") {
+                'e' | 'E' => {
+                    match s.len() {
+                        6 => 2,  // second
+                        7 => 7,  // seventh
+                        _ => 17, // seventeenth
+                    }
+                }
+                _ => {
+                    if s.len() == 5 {
+                        6 // sixth
+                    } else {
+                        16 // sixteenth
+                    }
+                }
+            }
+        }
+        't' | 'T' => {
+            match s.chars().nth(1).expect("too short") {
+                'h' | 'H' => {
+                    match s.chars().nth(4).expect("too short") {
+                        'd' | 'D' => 3, //third
+                        _ => {
+                            match s.chars().nth(5).expect("too short") {
+                                'e' | 'E' => 13, // thirteenth
+                                'i' | 'I' => 30, // thirtieth
+                                _ => 31,         // thirty-first
+                            }
+                        }
+                    }
+                }
+                'e' | 'E' => 10, // tenth
+                _ => {
+                    match s.chars().nth(3).expect("too short") {
+                        'l' | 'L' => 12, // twelfth
+                        _ => {
+                            if s.len() == 9 {
+                                20 // twentiety
+                            } else {
+                                20 + ordinal(&s[7..s.len()]) // twenty-first...
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        'e' | 'E' => {
+            match s.chars().nth(1).expect("too short") {
+                'i' | 'I' => {
+                    if s.len() == 6 {
+                        8 // eight
+                    } else {
+                        18 // eighteen
+                    }
+                }
+                _ => 11, // eleventh
+            }
+        }
+        _ => {
+            if s.len() == 5 {
+                9 // ninth
+            } else {
+                19 // nineteenth
+            }
+        }
+    }
 }
 
 /// expand a moment to the period containing it

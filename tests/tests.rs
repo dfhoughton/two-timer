@@ -1054,3 +1054,79 @@ fn regression_12pm() {
         assert!(false);
     }
 }
+
+#[test]
+fn year_2000() {
+    let d1 = NaiveDate::from_ymd(2000, 1, 1).and_hms(0, 0, 0);
+    let d2 = NaiveDate::from_ymd(2001, 1, 1).and_hms(0, 0, 0);
+    if let Ok((start, end, _)) = parse("2000", None) {
+        assert_eq!(d1, start);
+        assert_eq!(d2, end);
+    } else {
+        assert!(false);
+    }
+}
+
+#[test]
+fn ordinals() {
+    let patterns = [
+        (1, "1st", "first", "Monday"),
+        (2, "2nd", "second", "Tuesday"),
+        (3, "3rd", "third", "Wednesday"),
+        (4, "4th", "fourth", "Thursday"),
+        (5, "5th", "fifth", "Friday"),
+        (6, "6th", "sixth", "Saturday"),
+        (7, "7th", "seventh", "Sunday"),
+        (8, "8th", "eighth", "Monday"),
+        (9, "9th", "ninth", "Tuesday"),
+        (10, "10th", "tenth", "Wednesday"),
+        (11, "11th", "eleventh", "Thursday"),
+        (12, "12th", "twelfth", "Friday"),
+        (13, "13th", "thirteenth", "Saturday"),
+        (14, "14th", "fourteenth", "Sunday"),
+        (15, "15th", "fifteenth", "Monday"),
+        (16, "16th", "sixteenth", "Tuesday"),
+        (17, "17th", "seventeenth", "Wednesday"),
+        (18, "18th", "eighteenth", "Thursday"),
+        (19, "19th", "nineteenth", "Friday"),
+        (20, "20th", "twentieth", "Saturday"),
+        (21, "21st", "twenty-first", "Sunday"),
+        (22, "22nd", "twenty-second", "Monday"),
+        (23, "23rd", "twenty-third", "Tuesday"),
+        (24, "24th", "twenty-fourth", "Wednesday"),
+        (25, "25th", "twenty-fifth", "Thursday"),
+        (26, "26th", "twenty-sixth", "Friday"),
+        (27, "27th", "twenty-seventh", "Saturday"),
+        (28, "28th", "twenty-eighth", "Sunday"),
+        (29, "29th", "twenty-ninth", "Monday"),
+        (30, "30th", "thirtieth", "Tuesday"),
+        (31, "31st", "thirty-first", "Wednesday"),
+    ];
+    let base_date = NaiveDate::from_ymd(2018, 1, 1).and_hms(0, 0, 0);
+    for (cardinal, abbv, ordinal, weekday) in patterns.iter() {
+        let d1 = base_date + Duration::days(*cardinal as i64 - 1);
+        let d2 = d1 + Duration::days(1);
+        let subpatterns = [
+            format!("January {}, 2018", abbv),
+            format!("{}, January {}, 2018", weekday, abbv),
+            format!("January {}, 2018", ordinal),
+            format!("{}, January {}, 2018", weekday, ordinal),
+            format!("the {} of January 2018", abbv),
+            format!("{}, the {} of January 2018", weekday, abbv),
+            format!("the {} of January 2018", ordinal),
+            format!("{}, the {} of January 2018", weekday, ordinal),
+        ];
+        for p in subpatterns.iter() {
+            match parse(p, None) {
+                Ok((start, end, _)) => {
+                    assert_eq!(d1, start);
+                    assert_eq!(d2, end);
+                }
+                Err(e) => {
+                    println!("{:?}", e);
+                    assert!(false, "didn't match");
+                }
+            }
+        }
+    }
+}

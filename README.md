@@ -22,5 +22,7 @@ Some expressions it can handle:
 * 1960-05-06
 * 5000BCE
 * next weekend
+* 2000
+* the nineteenth of March 1810
 
 The complete API is available at https://docs.rs/two_timer/0.1.0/two_timer/.
