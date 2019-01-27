@@ -191,30 +191,39 @@ lazy_static! {
     pub static ref GRAMMAR: Grammar = grammar!{
         (?ibBw)
 
-        TOP -> r(r"\A") <something> r(r"\z")
+        TOP -> r(r"\A") <time_expression> r(r"\z")
 
-        something => <universal> | <particular>
+        time_expression => <universal> | <particular>
+        // various phrases all meaning from the first measurable moment to the last
         universal => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
+        // anything other than universal
         particular => <one_time> | <two_times>
         one_time => <moment_or_period>
         two_times -> ("from")? <moment_or_period> <to> <moment_or_period>
+
         to => <up_to> | <through>
         up_to => [["to", "until", "up to", "till"]]
         through => [["up through", "through", "thru"]] | r("-+")
+
         moment_or_period => <moment> | <period>
         period => <named_period> | <specific_period>
         specific_period => <modified_period> | <month_and_year> | <year>
         month_and_year -> <a_month> <year>
         named_period => <a_day> | <a_month>
         modified_period -> <modifier> <modifiable_period>
-        modifier => [["this", "last", "next"]]
         modifiable_period => [["week", "month", "year", "pay period", "pp", "weekend"]] | <a_month> | <a_day>
         moment -> <at_time_on>? <some_day> <at_time>? | <specific_time> | <time>
         specific_time => <first_time> | <last_time>
         some_day => <specific_day> | <relative_day>
         specific_day => <adverb> | <date_with_year>
-        relative_day => <a_day>
-        adverb => [["now", "today", "tomorrow", "yesterday"]]
+        relative_day => <a_day> | <a_day_in_month>
+
+        a_day_in_month => <ordinal_day> | <day_and_month>
+        ordinal_day -> ("the") <o_day>                    // the first
+        day_and_month -> <n_month> r("[./-]") <n_day>     // 5-6
+        day_and_month -> <a_month> <o_n_day>              // June 5, June 5th, June fifth
+        day_and_month -> ("the") <o_day> ("of") <a_month> // the 5th of June, the fifth of June
+
         date_with_year => <n_date> | <a_date>
 
         n_date -> <year>    r("[./-]") <n_month> r("[./-]") <n_day>
@@ -226,6 +235,8 @@ lazy_static! {
         a_date -> <day_prefix>? <n_day> <a_month> <year>
         a_date -> <day_prefix>? ("the") <o_day> ("of") <a_month> <year>
 
+        modifier => [["this", "last", "next"]]
+        adverb => [["now", "today", "tomorrow", "yesterday"]]
         day_prefix => <a_day> (",")
         o_n_day => <n_day> | <o_day>
         at_time -> ("at") <time>
@@ -547,11 +558,13 @@ pub fn parse(
                 };
             } else {
                 return match specific_moment(first, &config) {
-                    Ok((d1, _)) => {
-                        let (d2, d3) = relative_moment(last, &config, &d1, false);
-                        let d2 = pick_terminus(d2, d3, is_through);
-                        Ok((d1, d2, true))
-                    }
+                    Ok((d1, _)) => match relative_moment(last, &config, &d1, false) {
+                        Ok((d2, d3)) => {
+                            let d2 = pick_terminus(d2, d3, is_through);
+                            Ok((d1, d2, true))
+                        }
+                        Err(s) => Err(s),
+                    },
                     Err(s) => Err(s),
                 };
             }
@@ -559,18 +572,28 @@ pub fn parse(
             return match specific_moment(last, &config) {
                 Ok((d2, d3)) => {
                     let d2 = pick_terminus(d2, d3, is_through);
-                    let (d1, _) = relative_moment(first, &config, &d2, true);
-                    Ok((d1, d2, true))
+                    match relative_moment(first, &config, &d2, true) {
+                        Ok((d1, _)) => Ok((d1, d2, true)),
+                        Err(s) => Err(s),
+                    }
                 }
                 Err(s) => Err(s),
             };
         } else {
             // the first moment is assumed to be before now
-            let (d1, _) = relative_moment(first, &config, &config.now, true);
-            // the second moment is necessarily after the first momentß
-            let (d2, d3) = relative_moment(last, &config, &d1, false);
-            let d2 = pick_terminus(d2, d3, is_through);
-            return Ok((d1, d2, true));
+            return match relative_moment(first, &config, &config.now, true) {
+                Ok((d1, _)) => {
+                    // the second moment is necessarily after the first moment
+                    match relative_moment(last, &config, &d1, false) {
+                        Ok((d2, d3)) => {
+                            let d2 = pick_terminus(d2, d3, is_through);
+                            Ok((d1, d2, true))
+                        }
+                        Err(s) => Err(s),
+                    }
+                }
+                Err(s) => Err(s),
+            };
         }
     }
     unreachable!();
@@ -910,7 +933,7 @@ fn handle_one_time(
     } else if let Some(moment) = moment.name("specific_time") {
         handle_specific_time(moment, config)
     } else {
-        Ok(relative_moment(moment, config, &config.now, true))
+        relative_moment(moment, config, &config.now, true)
     };
     match r {
         Ok((d1, d2)) => Ok((d1, d2, false)),
@@ -948,7 +971,16 @@ fn relative_moment(
     config: &Config,
     other_time: &NaiveDateTime,
     before: bool,
-) -> (NaiveDateTime, NaiveDateTime) {
+) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+    if let Some(a_month_and_a_day) = m.name("a_day_in_month") {
+        return match month_and_a_day(a_month_and_a_day, config, other_time, before) {
+            Ok(d) => Ok(moment_and_time(
+                &config.now(d.and_hms(0, 0, 0)).period(Period::Day),
+                m.name("time"),
+            )),
+            Err(e) => Err(e),
+        };
+    }
     if let Some(day) = m.name("a_day") {
         let wd = weekday(day.as_str());
         let mut delta =
@@ -960,10 +992,10 @@ fn relative_moment(
         if !before {
             d = d + Duration::days(7);
         }
-        return moment_and_time(
+        return Ok(moment_and_time(
             &config.now(d.and_hms(0, 0, 0)).period(Period::Day),
             m.name("time"),
-        );
+        ));
     }
     if let Some(t) = m.name("time") {
         let (hour, minute, second) = time(t);
@@ -986,7 +1018,7 @@ fn relative_moment(
         } else if !before && t < *other_time {
             t = t + Duration::days(1);
         }
-        return moment_to_period(t, &period, config);
+        return Ok(moment_to_period(t, &period, config));
     }
     if let Some(month) = m.name("a_month") {
         let month = a_month(month);
@@ -1006,13 +1038,73 @@ fn relative_moment(
         let d = NaiveDate::from_ymd(year, month, 1).and_hms(0, 0, 0);
         let (d1, d2) = moment_to_period(d, &Period::Month, config);
         if before && d1 >= *other_time {
-            return moment_to_period(d1.with_year(d1.year() - 1).unwrap(), &Period::Month, config);
+            return Ok(moment_to_period(
+                d1.with_year(d1.year() - 1).unwrap(),
+                &Period::Month,
+                config,
+            ));
         } else if !before && d2 <= *other_time {
-            return moment_to_period(d1.with_year(d1.year() + 1).unwrap(), &Period::Month, config);
+            return Ok(moment_to_period(
+                d1.with_year(d1.year() + 1).unwrap(),
+                &Period::Month,
+                config,
+            ));
         }
-        return (d1, d2);
+        return Ok((d1, d2));
     }
     unreachable!()
+}
+
+// for things like "the fifth", "March fifth", "5-6"
+fn month_and_a_day(
+    m: &Match,
+    config: &Config,
+    other_time: &NaiveDateTime,
+    before: bool,
+) -> Result<NaiveDate, TimeError> {
+    if m.has("ordinal_day") {
+        let month = other_time.month();
+        return match NaiveDate::from_ymd_opt(config.now.year(), month, o_day(m, month)) {
+            Some(d) => Ok(d),
+            None => Err(TimeError::ImpossibleDate(format!(
+                "there is no day {} in the year {}",
+                m.as_str(),
+                config.now.year()
+            ))),
+        };
+    }
+    let (month, day) = if let Some(month) = m.name("n_month") {
+        let month = n_month(month);
+        let day = m.name("n_day").unwrap();
+        (month, n_day(day))
+    } else {
+        let month = a_month(m);
+        let day = if let Some(day) = m.name("n_day") {
+            n_day(day)
+        } else {
+            o_day(m, month)
+        };
+        (month, day)
+    };
+    let year = if before {
+        config.now.year()
+    } else {
+        if month < other_time.month() {
+            other_time.year() + 1
+        } else {
+            other_time.year()
+        }
+    };
+    match NaiveDate::from_ymd_opt(year, month, day) {
+        Some(d) => Ok(d),
+        None => Err(TimeError::ImpossibleDate(format!(
+            "could not construct date from {} with year {}, month {}, and day {}",
+            m.as_str(),
+            year,
+            month,
+            day
+        ))),
+    }
 }
 
 fn specific_moment(

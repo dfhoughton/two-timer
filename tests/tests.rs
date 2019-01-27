@@ -5,6 +5,11 @@ extern crate chrono;
 use chrono::naive::NaiveDate;
 use chrono::{Duration, Local};
 
+// a debugging method to print out the parse tree
+fn show_me(p: &str) {
+    println!("{}", two_timer::MATCHER.parse(p).unwrap());
+}
+
 #[test]
 fn always() {
     let alpha = chrono::naive::MIN_DATE.and_hms_milli(0, 0, 0, 0);
@@ -1186,6 +1191,26 @@ fn kalends_nones_ids() {
         let d2 = d1 + Duration::days(1);
         let p = format!("the ides of {} 2018", m);
         match parse(&p, None) {
+            Ok((start, end, _)) => {
+                assert_eq!(d1, start);
+                assert_eq!(d2, end);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                assert!(false, "didn't match");
+            }
+        }
+    }
+}
+
+#[test]
+fn day_and_month() {
+    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 5, 15).and_hms(0, 0, 0);
+    let d2 = d1 + Duration::days(1);
+    let patterns = ["the ides of May", "5-15", "the fifteenth", "May fifteenth"];
+    for p in patterns.iter() {
+        match parse(p, Some(Config::new().now(now))) {
             Ok((start, end, _)) => {
                 assert_eq!(d1, start);
                 assert_eq!(d2, end);

@@ -24,5 +24,6 @@ Some expressions it can handle:
 * next weekend
 * 2000
 * the nineteenth of March 1810
+* the ides of March
 
 The complete API is available at https://docs.rs/two_timer/0.1.0/two_timer/.
