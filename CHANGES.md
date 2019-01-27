@@ -12,3 +12,5 @@
 * fixed "12 pm" bug
 ## 1.0.4
 * added `<year>` pattern
+* added ordinals for days of the month
+* added kalends, nones, ides

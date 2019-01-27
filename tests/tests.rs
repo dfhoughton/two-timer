@@ -1130,3 +1130,70 @@ fn ordinals() {
         }
     }
 }
+
+#[test]
+fn kalends_nones_ids() {
+    let months = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ];
+    for (i, m) in months.iter().enumerate() {
+        let i = (i + 1) as u32;
+        let big_month = match i {
+            3 | 5 | 7 | 10 => true,
+            _ => false,
+        };
+        // kalends
+        let d1 = NaiveDate::from_ymd(2018, i, 1).and_hms(0, 0, 0);
+        let d2 = d1 + Duration::days(1);
+        let p = format!("the kalends of {} 2018", m);
+        match parse(&p, None) {
+            Ok((start, end, _)) => {
+                assert_eq!(d1, start);
+                assert_eq!(d2, end);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                assert!(false, "didn't match");
+            }
+        }
+        // nones
+        let d1 = NaiveDate::from_ymd(2018, i, if big_month { 7 } else { 5 }).and_hms(0, 0, 0);
+        let d2 = d1 + Duration::days(1);
+        let p = format!("the nones of {} 2018", m);
+        match parse(&p, None) {
+            Ok((start, end, _)) => {
+                assert_eq!(d1, start);
+                assert_eq!(d2, end);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                assert!(false, "didn't match");
+            }
+        }
+        // ides
+        let d1 = NaiveDate::from_ymd(2018, i, if big_month { 15 } else { 13 }).and_hms(0, 0, 0);
+        let d2 = d1 + Duration::days(1);
+        let p = format!("the ides of {} 2018", m);
+        match parse(&p, None) {
+            Ok((start, end, _)) => {
+                assert_eq!(d1, start);
+                assert_eq!(d2, end);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                assert!(false, "didn't match");
+            }
+        }
+    }
+}
