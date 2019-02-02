@@ -1261,7 +1261,8 @@ fn one_week_after_may_6_1969() {
 
 #[test]
 fn one_week_around_may_6_1969() {
-    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0) - Duration::milliseconds( 7 * 24 * 60 * 60 * 1000 / 2);
+    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0)
+        - Duration::milliseconds(7 * 24 * 60 * 60 * 1000 / 2);
     let d2 = d1 + Duration::days(7);
     let patterns = ["one week around May 6, 1969", "1 week around May 6, 1969"];
     for p in patterns.iter() {
@@ -1269,6 +1270,28 @@ fn one_week_around_may_6_1969() {
             Ok((start, end, _)) => {
                 assert_eq!(d1, start);
                 assert_eq!(d2, end);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                assert!(false, "didn't match");
+            }
+        }
+    }
+}
+
+#[test]
+fn number_before_test() {
+    let d = NaiveDate::from_ymd(1969, 5, 6).and_hms(13, 0, 0);
+    let nums = [
+        "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    ];
+    for (i, p) in nums.iter().enumerate() {
+        let d = d - Duration::seconds((i + 2) as i64);
+        let p = format!("{} seconds before May 6, 1969 at 1:00 PM", p);
+        match parse(&p, None) {
+            Ok((start, end, _)) => {
+                assert_eq!(d, start);
+                assert_eq!(d, end);
             }
             Err(e) => {
                 println!("{:?}", e);
