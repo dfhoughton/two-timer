@@ -1300,3 +1300,35 @@ fn number_before_test() {
         }
     }
 }
+
+#[test]
+fn noon() {
+    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(12, 0, 0);
+    let d2 = d1 + Duration::hours(1);
+    match parse("noon on May 6, 1969", None) {
+        Ok((start, end, _)) => {
+            assert_eq!(d1, start);
+            assert_eq!(d2, end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
+}
+
+#[test]
+fn midnight() {
+    let d1 = NaiveDate::from_ymd(1969, 5, 7).and_hms(0, 0, 0);
+    let d2 = d1 + Duration::hours(1);
+    match parse("midnight on May 6, 1969", None) {
+        Ok((start, end, _)) => {
+            assert_eq!(d1, start);
+            assert_eq!(d2, end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
+}

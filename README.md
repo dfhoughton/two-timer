@@ -30,5 +30,7 @@ Some expressions it can handle:
 * two seconds before 12:00 PM
 * 1 week after May first
 * 15 minutes around 12:13:43 PM
+* noon on May 6, 1969
+* midnight on May 6, 1969
 
 The complete API is available at https://docs.rs/two_timer/0.1.0/two_timer/.

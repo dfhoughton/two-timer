@@ -249,7 +249,8 @@ lazy_static! {
         o_n_day => <n_day> | <o_day>
         at_time -> ("at") <time>
         at_time_on -> ("at")? <time> ("on")?
-        time -> <hour_12> <am_pm>? | <hour_24>
+        time -> <hour_12> <am_pm>? | <hour_24> | <canonical_time>
+        canonical_time => [["noon", "midnight"]]
         hour_24 => <h24>
         hour_24 => <h24> (":") <minute>
         hour_24 => <h24> (":") <minute> (":") <second>
@@ -976,7 +977,7 @@ fn handle_one_time(
 // add time to a date
 fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (NaiveDateTime, NaiveDateTime) {
     if let Some(daytime) = daytime {
-        let (hour, minute, second) = time(daytime);
+        let (hour, minute, second, is_midnight) = time(daytime);
         let period = if second.is_some() {
             Period::Second
         } else if minute.is_some() {
@@ -984,7 +985,7 @@ fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (NaiveDateTime, 
         } else {
             Period::Hour
         };
-        let m = config
+        let mut m = config
             .now
             .with_hour(hour)
             .unwrap()
@@ -992,6 +993,9 @@ fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (NaiveDateTime, 
             .unwrap()
             .with_second(second.unwrap_or(0))
             .unwrap();
+        if is_midnight {
+            m = m + Duration::days(1); // midnight is second 0 *of the next day*
+        }
         moment_to_period(m, &period, config)
     } else {
         moment_to_period(config.now, &config.period, config)
@@ -1030,7 +1034,7 @@ fn relative_moment(
         ));
     }
     if let Some(t) = m.name("time") {
-        let (hour, minute, second) = time(t);
+        let (hour, minute, second, is_midnight) = time(t);
         let period = if second.is_some() {
             Period::Second
         } else if minute.is_some() {
@@ -1045,6 +1049,9 @@ fn relative_moment(
             .unwrap()
             .with_second(second.unwrap_or(0))
             .unwrap();
+        if is_midnight {
+            t = t + Duration::days(1); // midnight is second 0 *of the next day*
+        }
         if before && t > *other_time {
             t = t - Duration::days(1);
         } else if !before && t < *other_time {
@@ -1177,7 +1184,14 @@ fn a_month(m: &Match) -> u32 {
 }
 
 // extract hour, minute, and second from time match
-fn time(m: &Match) -> (u32, Option<u32>, Option<u32>) {
+// last parameter is basically whether the value returned is for "midnight", which requires special handling
+fn time(m: &Match) -> (u32, Option<u32>, Option<u32>, bool) {
+    if let Some(m) = m.name("canonical_time") {
+        return match m.as_str().chars().nth(0).unwrap() {
+            'n' | 'N' => (12, None, None, false),
+            _ => (0, None, None, true),
+        };
+    }
     let hour = if let Some(hour_24) = m.name("hour_24") {
         s_to_n(hour_24.name("h24").unwrap().as_str())
     } else if let Some(hour_12) = m.name("hour_12") {
@@ -1202,12 +1216,12 @@ fn time(m: &Match) -> (u32, Option<u32>, Option<u32>) {
         let minute = s_to_n(minute.as_str());
         if let Some(second) = m.name("second") {
             let second = s_to_n(second.as_str());
-            (hour, Some(minute), Some(second))
+            (hour, Some(minute), Some(second), false)
         } else {
-            (hour, Some(minute), None)
+            (hour, Some(minute), None, false)
         }
     } else {
-        (hour, None, None)
+        (hour, None, None, false)
     }
 }
 
