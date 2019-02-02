@@ -212,7 +212,9 @@ lazy_static! {
         named_period => <a_day> | <a_month>
         modified_period -> <modifier> <modifiable_period>
         modifiable_period => [["week", "month", "year", "pay period", "pp", "weekend"]] | <a_month> | <a_day>
-        moment -> <at_time_on>? <some_day> <at_time>? | <specific_time> | <time>
+        moment -> <adjustment>? <point_in_time>
+        adjustment -> <amount> <direction> // two minutes before
+        point_in_time -> <at_time_on>? <some_day> <at_time>? | <specific_time> | <time>
         specific_time => <first_time> | <last_time>
         some_day => <specific_day> | <relative_day>
         specific_day => <adverb> | <date_with_year>
@@ -234,6 +236,12 @@ lazy_static! {
         a_date -> <day_prefix>? <a_month> <o_n_day> (",") <year>
         a_date -> <day_prefix>? <n_day> <a_month> <year>
         a_date -> <day_prefix>? ("the") <o_day> ("of") <a_month> <year>
+
+        amount -> <count> <unit>
+        count => r(r"[1-9][0-9]*") | <a_count>
+        a_count => [["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]]
+        direction -> [["before", "after", "around"]]
+        unit => [["week", "day", "hour", "minute", "second"]] ("s")?
 
         modifier => [["this", "last", "next"]]
         adverb => [["now", "today", "tomorrow", "yesterday"]]
@@ -530,7 +538,17 @@ pub fn parse(
     let parse = parse.name("particular").unwrap();
     let config = config.unwrap_or(Config::new());
     if let Some(moment) = parse.name("one_time") {
-        return handle_one_time(moment, &config);
+        return match handle_one_time(moment, &config) {
+            Err(e) => Err(e),
+            Ok((d1, d2, b)) => {
+                let (d3, d4) = adjust(d1, d2, moment);
+                if d1 == d3 {
+                    Ok((d1, d2, b))
+                } else {
+                    Ok((d3, d4, b))
+                }
+            }
+        };
     }
     if let Some(two_times) = parse.name("two_times") {
         let first = &two_times.children().unwrap()[0];
@@ -539,41 +557,53 @@ pub fn parse(
         if specific(first) {
             if specific(last) {
                 return match specific_moment(first, &config) {
-                    Ok((d1, _)) => match specific_moment(last, &config) {
-                        Ok((d2, d3)) => {
-                            let d2 = pick_terminus(d2, d3, is_through);
-                            if d1 <= d2 {
-                                Ok((d1, d2, true))
-                            } else {
-                                Err(TimeError::Misordered(format!(
-                                    "{} is after {}",
-                                    first.as_str(),
-                                    last.as_str()
-                                )))
+                    Ok((d1, d2)) => {
+                        let (d1, _) = adjust(d1, d2, first);
+                        match specific_moment(last, &config) {
+                            Ok((d2, d3)) => {
+                                let (d2, d3) = adjust(d2, d3, last);
+                                let d2 = pick_terminus(d2, d3, is_through);
+                                if d1 <= d2 {
+                                    Ok((d1, d2, true))
+                                } else {
+                                    Err(TimeError::Misordered(format!(
+                                        "{} is after {}",
+                                        first.as_str(),
+                                        last.as_str()
+                                    )))
+                                }
                             }
+                            Err(s) => Err(s),
                         }
-                        Err(s) => Err(s),
-                    },
+                    }
                     Err(s) => Err(s),
                 };
             } else {
                 return match specific_moment(first, &config) {
-                    Ok((d1, _)) => match relative_moment(last, &config, &d1, false) {
-                        Ok((d2, d3)) => {
-                            let d2 = pick_terminus(d2, d3, is_through);
-                            Ok((d1, d2, true))
+                    Ok((d1, d2)) => {
+                        let (d1, _) = adjust(d1, d2, first);
+                        match relative_moment(last, &config, &d1, false) {
+                            Ok((d2, d3)) => {
+                                let (d2, d3) = adjust(d2, d3, last);
+                                let d2 = pick_terminus(d2, d3, is_through);
+                                Ok((d1, d2, true))
+                            }
+                            Err(s) => Err(s),
                         }
-                        Err(s) => Err(s),
-                    },
+                    }
                     Err(s) => Err(s),
                 };
             }
         } else if specific(last) {
             return match specific_moment(last, &config) {
                 Ok((d2, d3)) => {
+                    let (d2, d3) = adjust(d2, d3, last);
                     let d2 = pick_terminus(d2, d3, is_through);
                     match relative_moment(first, &config, &d2, true) {
-                        Ok((d1, _)) => Ok((d1, d2, true)),
+                        Ok((d1, d3)) => {
+                            let (d1, _) = adjust(d1, d3, first);
+                            Ok((d1, d2, true))
+                        }
                         Err(s) => Err(s),
                     }
                 }
@@ -582,10 +612,12 @@ pub fn parse(
         } else {
             // the first moment is assumed to be before now
             return match relative_moment(first, &config, &config.now, true) {
-                Ok((d1, _)) => {
+                Ok((d1, d2)) => {
+                    let (d1, _) = adjust(d1, d2, first);
                     // the second moment is necessarily after the first moment
                     match relative_moment(last, &config, &d1, false) {
                         Ok((d2, d3)) => {
+                            let (d2, d3) = adjust(d2, d3, last);
                             let d2 = pick_terminus(d2, d3, is_through);
                             Ok((d1, d2, true))
                         }
@@ -1466,5 +1498,74 @@ fn weekday(s: &str) -> Weekday {
         }
         'U' => Weekday::Sun,
         _ => unreachable!(),
+    }
+}
+
+// adjust a period relative to another period -- e.g., "one week before June" or "five minutes around 12:00 PM"
+fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, NaiveDateTime) {
+    if let Some(adjustment) = m.name("adjustment") {
+        let count = count(adjustment.name("count").unwrap()) as i64;
+        let unit = match adjustment
+            .name("unit")
+            .unwrap()
+            .as_str()
+            .chars()
+            .nth(0)
+            .unwrap()
+        {
+            'w' | 'W' => Duration::weeks(count),
+            'd' | 'D' => Duration::days(count),
+            'h' | 'H' => Duration::hours(count),
+            'm' | 'M' => Duration::minutes(count),
+            _ => Duration::seconds(count),
+        };
+        let direction = adjustment.name("direction").unwrap().as_str();
+        match direction.chars().nth(0).unwrap() {
+            'b' | 'B' => {
+                let d = d1 - unit;
+                (d, d)
+            }
+            _ => match direction.chars().nth(1).unwrap() {
+                'f' | 'F' => {
+                    let d = d2 + unit;
+                    (d, d)
+                }
+                _ => {
+                    let d1 = d1 - Duration::milliseconds(unit.num_milliseconds() / 2);
+                    let d2 = d1 + unit;
+                    (d1, d2)
+                }
+            },
+        }
+    } else {
+        (d1, d2)
+    }
+}
+
+// for converting a few cardinal numbers and integer expressions
+fn count(m: &Match) -> u32 {
+    let s = m.as_str();
+    if m.has("a_count") {
+        // cardinal numbers
+        match s.chars().nth(0).expect("impossibly short") {
+            'o' | 'O' => 1,
+            't' | 'T' => match s.chars().nth(1).expect("impossibly short") {
+                'w' | 'W' => 2,
+                'h' | 'H' => 3,
+                _ => 10,
+            },
+            'f' | 'F' => match s.chars().nth(1).expect("impossibly short") {
+                'o' | 'O' => 4,
+                _ => 5,
+            },
+            's' | 'S' => match s.chars().nth(1).expect("impossibly short") {
+                'i' | 'I' => 6,
+                _ => 7,
+            },
+            'e' | 'E' => 8,
+            _ => 9,
+        }
+    } else {
+        s.parse::<u32>().unwrap()
     }
 }

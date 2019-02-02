@@ -24,6 +24,11 @@ Some expressions it can handle:
 * next weekend
 * 2000
 * the nineteenth of March 1810
+* the 5th of November
 * the ides of March
+* the first
+* two seconds before 12:00 PM
+* 1 week after May first
+* 15 minutes around 12:13:43 PM
 
 The complete API is available at https://docs.rs/two_timer/0.1.0/two_timer/.
