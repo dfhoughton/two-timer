@@ -32,5 +32,6 @@ Some expressions it can handle:
 * 15 minutes around 12:13:43 PM
 * noon on May 6, 1969
 * midnight on May 6, 1969
+* Friday the 13th
 
 The complete API is available at https://docs.rs/two_timer/0.1.0/two_timer/.
