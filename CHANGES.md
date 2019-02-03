@@ -20,3 +20,5 @@
 * added `<count>` `<periods>` from now/ago
 ## 1.0.5
 * better organization and documentation of grammar
+## 1.06
+* added "before and after"

@@ -1260,6 +1260,26 @@ fn one_week_after_may_6_1969() {
 }
 
 #[test]
+fn one_week_before_and_after_may_6_1969() {
+    let d = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = d - Duration::days(7);
+    let d2 = d + Duration::days(7);
+    let patterns = ["one week before and after May 6, 1969", "1 week before and after May 6, 1969"];
+    for p in patterns.iter() {
+        match parse(p, None) {
+            Ok((start, end, _)) => {
+                assert_eq!(d1, start);
+                assert_eq!(d2, end);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                assert!(false, "didn't match");
+            }
+        }
+    }
+}
+
+#[test]
 fn one_week_around_may_6_1969() {
     let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0)
         - Duration::milliseconds(7 * 24 * 60 * 60 * 1000 / 2);

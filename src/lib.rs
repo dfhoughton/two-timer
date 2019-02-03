@@ -296,7 +296,7 @@ lazy_static! {
         am_pm           => (?-i) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
         bce             => (?-ib) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
         ce              => (?-ib) [["ce", "c.e.", "ad", "a.d.", "CE", "C.E.", "AD", "A.D."]]
-        direction       -> [["before", "after", "around"]]
+        direction       -> [["before", "after", "around", "before and after"]]
         displacement    => [["week", "day", "hour", "minute", "second"]] ("s")?   // not handling variable-width periods like months or years
         from_now_or_ago => [["from now", "ago"]]
         h12             => [(1..=12).into_iter().collect::<Vec<_>>()]
@@ -858,7 +858,7 @@ fn handle_specific_period(
         };
         let span = match period {
             Period::Week => (d, d + Duration::weeks(1)),
-            _ => moment_to_period(d, &period, config)
+            _ => moment_to_period(d, &period, config),
         };
         return Ok(span);
     }
@@ -1614,8 +1614,14 @@ fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, Na
         let direction = adjustment.name("direction").unwrap().as_str();
         match direction.chars().nth(0).unwrap() {
             'b' | 'B' => {
-                let d = d1 - unit;
-                (d, d)
+                if direction.len() == 6 {
+                    // before
+                    let d = d1 - unit;
+                    (d, d)
+                } else {
+                    // before and after
+                    (d1 - unit, d1 + unit)
+                }
             }
             _ => match direction.chars().nth(1).unwrap() {
                 'f' | 'F' => {
