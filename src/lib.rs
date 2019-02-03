@@ -80,6 +80,9 @@ Tuesday, May 6, 1969 at 3:52 AM => 1969-05-06 03:52:00 --- 1969-05-06 03:53:00
 March 15, 44 BC                 => -0043-03-15 00:00:00 --- -0043-03-16 00:00:00
 ```
 
+For the full grammar of time expressions, view the source of the `parse` function and
+scroll up. The grammar is provided at the top of the file.
+
 # Relative Times
 
 It is common in English to use time expressions which must be interpreted relative to some
@@ -193,41 +196,55 @@ lazy_static! {
 
         TOP -> r(r"\A") <time_expression> r(r"\z")
 
+        // non-terminal patterns
+        // these are roughly ordered by dependency
+
         time_expression => <universal> | <particular>
-        // various phrases all meaning from the first measurable moment to the last
-        universal => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
-        // anything other than universal
+
         particular => <one_time> | <two_times>
+
         one_time => <moment_or_period>
+
         two_times -> ("from")? <moment_or_period> <to> <moment_or_period>
 
         to => <up_to> | <through>
-        up_to => [["to", "until", "up to", "till"]]
-        through => [["up through", "through", "thru"]] | r("-+")
 
         moment_or_period => <moment> | <period>
-        period => <named_period> | <specific_period>
-        specific_period => <modified_period> | <month_and_year> | <year> | <relative_period>
-        relative_period -> <count> <displacement> <from_now_or_ago>
-        displacement => [["week", "day", "hour", "minute", "second"]] ("s")? // not handling variable-width periods like months or years
-        from_now_or_ago => [["from now", "ago"]]
-        month_and_year -> <a_month> <year>
-        named_period => <a_day> | <a_month>
-        modified_period -> <modifier> <modifiable_period>
-        modifiable_period => [["week", "month", "year", "pay period", "pp", "weekend"]] | <a_month> | <a_day>
-        moment -> <adjustment>? <point_in_time>
-        adjustment -> <amount> <direction> // two minutes before
-        point_in_time -> <at_time_on>? <some_day> <at_time>? | <specific_time> | <time>
-        specific_time => <first_time> | <last_time>
-        some_day => <specific_day> | <relative_day>
-        specific_day => <adverb> | <date_with_year>
-        relative_day => <a_day> | <a_day_in_month>
 
-        a_day_in_month => <ordinal_day> | <day_and_month>
-        ordinal_day   -> <day_prefix>? ("the") <o_day>    // the first
-        day_and_month -> <n_month> r("[./-]") <n_day>     // 5-6
-        day_and_month -> <a_month> <o_n_day>              // June 5, June 5th, June fifth
-        day_and_month -> ("the") <o_day> ("of") <a_month> // the 5th of June, the fifth of June
+        period => <named_period> | <specific_period>
+
+        specific_period => <modified_period> | <month_and_year> | <year> | <relative_period>
+
+        modified_period -> <modifier> <modifiable_period>
+
+        modifiable_period => [["week", "month", "year", "pay period", "pp", "weekend"]] | <a_month> | <a_day>
+
+        month_and_year -> <a_month> <year>
+
+        year => <short_year> | ("-")? <n_year>
+        year -> <suffix_year> <year_suffix>
+
+        year_suffix => <ce> | <bce>
+
+        relative_period -> <count> <displacement> <from_now_or_ago>
+
+        count => r(r"[1-9][0-9]*") | <a_count>
+
+        named_period => <a_day> | <a_month>
+
+        moment -> <adjustment>? <point_in_time>
+
+        adjustment -> <amount> <direction> // two minutes before
+
+        amount -> <count> <unit>
+
+        point_in_time -> <at_time_on>? <some_day> <at_time>? | <specific_time> | <time>
+
+        at_time_on -> ("at")? <time> ("on")?
+
+        some_day => <specific_day> | <relative_day>
+
+        specific_day => <adverb> | <date_with_year>
 
         date_with_year => <n_date> | <a_date>
 
@@ -240,56 +257,63 @@ lazy_static! {
         a_date -> <day_prefix>? <n_day> <a_month> <year>
         a_date -> <day_prefix>? ("the") <o_day> ("of") <a_month> <year>
 
-        amount -> <count> <unit>
-        count => r(r"[1-9][0-9]*") | <a_count>
-        a_count => [["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]]
-        direction -> [["before", "after", "around"]]
-        unit => [["week", "day", "hour", "minute", "second"]] ("s")?
-
-        modifier => [["this", "last", "next"]]
-        adverb => [["now", "today", "tomorrow", "yesterday"]]
         day_prefix => <a_day> (",")?
-        o_n_day => <n_day> | <o_day>
+
+        relative_day => <a_day> | <a_day_in_month>
+
         at_time -> ("at") <time>
-        at_time_on -> ("at")? <time> ("on")?
+
+        specific_time => <first_time> | <last_time>
+
         time -> <hour_12> <am_pm>? | <hour_24> | <named_time>
-        named_time => [["noon", "midnight"]]
-        hour_24 => <h24>
-        hour_24 => <h24> (":") <minute>
-        hour_24 => <h24> (":") <minute> (":") <second>
+
         hour_12 => <h12>
         hour_12 => <h12> (":") <minute>
         hour_12 => <h12> (":") <minute> (":") <second>
-        minute => [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
-        second => [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
-        am_pm => (?-i) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
-        h12 => [(1..=12).into_iter().collect::<Vec<_>>()]
-        h24 => [(1..=24).into_iter().collect::<Vec<_>>()]
-        year => <short_year> | ("-")? <n_year>
-        year -> <suffix_year> <year_suffix>
-        short_year => [
-                (0..=99)
-                    .into_iter()
-                    .flat_map(|i| vec![format!("'{:02}", i), format!("{:02}", i)])
-                    .collect::<Vec<_>>()
-            ]
-        n_year => r(r"\b(?:[1-9][0-9]{0,4}|0)\b")
-        suffix_year => r(r"\b[1-9][0-9]{0,4}")
-        year_suffix => <ce> | <bce>
-        ce => (?-ib) [["ce", "c.e.", "ad", "a.d.", "CE", "C.E.", "AD", "A.D."]]
-        bce => (?-ib) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
-        n_day => [
-                (1..=31)
-                    .into_iter()
-                    .flat_map(|i| vec![i.to_string(), format!("{:02}", i)])
-                    .collect::<Vec<_>>()
-            ]
-        n_month => [
-                (1..12)
-                    .into_iter()
-                    .flat_map(|i| vec![format!("{:02}", i), format!("{}", i)])
-                    .collect::<Vec<_>>()
-            ]
+
+        hour_24 => <h24>
+        hour_24 => <h24> (":") <minute>
+        hour_24 => <h24> (":") <minute> (":") <second>
+
+        a_day_in_month => <ordinal_day> | <day_and_month>
+
+        ordinal_day   -> <day_prefix>? ("the") <o_day>    // the first
+
+        o_day => <n_ordinal> | <a_ordinal> | <roman>
+
+        day_and_month -> <n_month> r("[./-]") <n_day>     // 5-6
+        day_and_month -> <a_month> <o_n_day>              // June 5, June 5th, June fifth
+        day_and_month -> ("the") <o_day> ("of") <a_month> // the 5th of June, the fifth of June
+
+        o_n_day => <n_day> | <o_day>
+
+        // terminal patterns
+        // these are organized into single-line and multi-line patterns, with each group alphabetized
+
+        // various phrases all meaning from the first measurable moment to the last
+        a_count         => [["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]]
+        adverb          => [["now", "today", "tomorrow", "yesterday"]]
+        am_pm           => (?-i) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
+        bce             => (?-ib) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
+        ce              => (?-ib) [["ce", "c.e.", "ad", "a.d.", "CE", "C.E.", "AD", "A.D."]]
+        direction       -> [["before", "after", "around"]]
+        displacement    => [["week", "day", "hour", "minute", "second"]] ("s")?   // not handling variable-width periods like months or years
+        from_now_or_ago => [["from now", "ago"]]
+        h12             => [(1..=12).into_iter().collect::<Vec<_>>()]
+        h24             => [(1..=24).into_iter().collect::<Vec<_>>()]
+        minute          => [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
+        modifier        => [["this", "last", "next"]]
+        named_time      => [["noon", "midnight"]]
+        n_year          => r(r"\b(?:[1-9][0-9]{0,4}|0)\b")
+        roman           => [["nones", "ides", "kalends"]]
+        unit            => [["week", "day", "hour", "minute", "second"]] ("s")?
+        universal       => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
+        up_to           => [["to", "until", "up to", "till"]]
+        second          => [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
+        suffix_year     => r(r"\b[1-9][0-9]{0,4}")
+        through         => [["up through", "through", "thru"]] | r("-+")
+
+        a_day => (?-i) [["M", "T", "W", "R", "F", "S", "U"]]
         a_day => [
                 "Sunday Monday Tuesday Wednesday Thursday Friday Saturday Tues Weds Thurs Tues. Weds. Thurs."
                     .split(" ")
@@ -303,7 +327,6 @@ lazy_static! {
                     ])
                     .collect::<Vec<_>>()
             ]
-        a_day => (?-i) [["M", "T", "W", "R", "F", "S", "U"]]
         a_month => [
                 "January February March April May June July August September October November December"
                      .split(" ")
@@ -311,71 +334,6 @@ lazy_static! {
                      .flat_map(|w| vec![w.to_string(), w[0..3].to_string()])
                      .collect::<Vec<_>>()
             ]
-        first_time => [[
-                "the beginning",
-                "the beginning of time",
-                "the first moment",
-                "the start",
-                "the very start",
-                "the first instant",
-                "the dawn of time",
-                "the big bang",
-                "the birth of the universe",
-            ]]
-        last_time => [[
-                "the end",
-                "the end of time",
-                "the very end",
-                "the last moment",
-                "eternity",
-                "infinity",
-                "doomsday",
-                "the crack of doom",
-                "armageddon",
-                "ragnarok",
-                "the big crunch",
-                "the heat death of the universe",
-                "doom",
-                "death",
-                "perdition",
-                "the last hurrah",
-                "ever after",
-                "the last syllable of recorded time",
-            ]]
-        o_day => <n_ordinal> | <a_ordinal> | <roman>
-        n_ordinal => [[
-                "1st",
-                "2nd",
-                "3rd",
-                "4th",
-                "5th",
-                "6th",
-                "7th",
-                "8th",
-                "9th",
-                "10th",
-                "11th",
-                "12th",
-                "13th",
-                "14th",
-                "15th",
-                "16th",
-                "17th",
-                "18th",
-                "19th",
-                "20th",
-                "21st",
-                "22nd",
-                "23rd",
-                "24th",
-                "25th",
-                "26th",
-                "27th",
-                "28th",
-                "29th",
-                "30th",
-                "31st",
-            ]]
         a_ordinal => [[
                 "first",
                 "second",
@@ -409,7 +367,88 @@ lazy_static! {
                 "thirtieth",
                 "thirty-first"
             ]]
-        roman => [["nones", "ides", "kalends"]]
+        first_time => [[
+                "the beginning",
+                "the beginning of time",
+                "the first moment",
+                "the start",
+                "the very start",
+                "the first instant",
+                "the dawn of time",
+                "the big bang",
+                "the birth of the universe",
+            ]]
+        last_time => [[
+                "the end",
+                "the end of time",
+                "the very end",
+                "the last moment",
+                "eternity",
+                "infinity",
+                "doomsday",
+                "the crack of doom",
+                "armageddon",
+                "ragnarok",
+                "the big crunch",
+                "the heat death of the universe",
+                "doom",
+                "death",
+                "perdition",
+                "the last hurrah",
+                "ever after",
+                "the last syllable of recorded time",
+            ]]
+        n_day => [
+                (1..=31)
+                    .into_iter()
+                    .flat_map(|i| vec![i.to_string(), format!("{:02}", i)])
+                    .collect::<Vec<_>>()
+            ]
+        n_month => [
+                (1..12)
+                    .into_iter()
+                    .flat_map(|i| vec![format!("{:02}", i), format!("{}", i)])
+                    .collect::<Vec<_>>()
+            ]
+        n_ordinal => [[
+                "1st",
+                "2nd",
+                "3rd",
+                "4th",
+                "5th",
+                "6th",
+                "7th",
+                "8th",
+                "9th",
+                "10th",
+                "11th",
+                "12th",
+                "13th",
+                "14th",
+                "15th",
+                "16th",
+                "17th",
+                "18th",
+                "19th",
+                "20th",
+                "21st",
+                "22nd",
+                "23rd",
+                "24th",
+                "25th",
+                "26th",
+                "27th",
+                "28th",
+                "29th",
+                "30th",
+                "31st",
+            ]]
+        short_year => [
+                (0..=99)
+                    .into_iter()
+                    .flat_map(|i| vec![format!("'{:02}", i), format!("{:02}", i)])
+                    .collect::<Vec<_>>()
+            ]
     };
 }
 lazy_static! {

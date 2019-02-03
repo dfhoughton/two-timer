@@ -18,3 +18,5 @@
 * added period before/after/around time
 * added noon and midnight
 * added `<count>` `<periods>` from now/ago
+## 1.0.5
+* better organization and documentation of grammar
