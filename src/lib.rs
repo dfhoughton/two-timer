@@ -31,6 +31,8 @@ pub fn main() {
         "5/6/69",
         "Tuesday, May 6, 1969 at 3:52 AM",
         "March 15, 44 BC",
+        "Friday the 13th",
+        "five minutes before and after midnight",
     ];
     // find the maximum phrase length for pretty formatting
     let max = phrases
@@ -57,27 +59,31 @@ pub fn main() {
 ```
 produces
 ```text
-now                             => 2019-01-05 12:56:00 --- 2019-01-05 12:57:00
-this year                       => 2019-01-01 00:00:00 --- 2020-01-01 00:00:00
-last Friday                     => 2018-12-28 00:00:00 --- 2018-12-29 00:00:00
-from now to the end of time     => 2019-01-05 12:56:00 --- +262143-12-31 23:59:59.999
-Ragnarok                        => +262143-12-31 23:59:59.999 --- +262143-12-31 23:59:59.999
-at 3:00 pm today                => 2019-01-05 15:00:00 --- 2019-01-05 15:01:00
-5/6/69                          => 1969-05-06 00:00:00 --- 1969-05-07 00:00:00
-Tuesday, May 6, 1969 at 3:52 AM => 1969-05-06 03:52:00 --- 1969-05-06 03:53:00
-March 15, 44 BC                 => -0043-03-15 00:00:00 --- -0043-03-16 00:00:00
+now                                    => 2019-02-03 14:40:00 --- 2019-02-03 14:41:00
+this year                              => 2019-01-01 00:00:00 --- 2020-01-01 00:00:00
+last Friday                            => 2019-01-25 00:00:00 --- 2019-01-26 00:00:00
+from now to the end of time            => 2019-02-03 14:40:00 --- +262143-12-31 23:59:59.999
+Ragnarok                               => +262143-12-31 23:59:59.999 --- +262143-12-31 23:59:59.999
+at 3:00 pm today                       => 2019-02-03 15:00:00 --- 2019-02-03 15:01:00
+5/6/69                                 => 1969-05-06 00:00:00 --- 1969-05-07 00:00:00
+Tuesday, May 6, 1969 at 3:52 AM        => 1969-05-06 03:52:00 --- 1969-05-06 03:53:00
+March 15, 44 BC                        => -0043-03-15 00:00:00 --- -0043-03-16 00:00:00
+Friday the 13th                        => 2018-07-13 00:00:00 --- 2018-07-14 00:00:00
+five minutes before and after midnight => 2019-02-02 23:55:00 --- 2019-02-03 00:05:00
 
 let "now" be some moment during the Battle of Hastings, specifically 1066-10-14 12:30:15
 
-now                             => 1066-10-14 12:30:00 --- 1066-10-14 12:31:00
-this year                       => 1066-01-01 00:00:00 --- 1067-01-01 00:00:00
-last Friday                     => 1066-10-05 00:00:00 --- 1066-10-06 00:00:00
-from now to the end of time     => 1066-10-14 12:30:00 --- +262143-12-31 23:59:59.999
-Ragnarok                        => +262143-12-31 23:59:59.999 --- +262143-12-31 23:59:59.999
-at 3:00 pm today                => 1066-10-14 15:00:00 --- 1066-10-14 15:01:00
-5/6/69                          => 0969-05-06 00:00:00 --- 0969-05-07 00:00:00
-Tuesday, May 6, 1969 at 3:52 AM => 1969-05-06 03:52:00 --- 1969-05-06 03:53:00
-March 15, 44 BC                 => -0043-03-15 00:00:00 --- -0043-03-16 00:00:00
+now                                    => 1066-10-14 12:30:00 --- 1066-10-14 12:31:00
+this year                              => 1066-01-01 00:00:00 --- 1067-01-01 00:00:00
+last Friday                            => 1066-10-05 00:00:00 --- 1066-10-06 00:00:00
+from now to the end of time            => 1066-10-14 12:30:00 --- +262143-12-31 23:59:59.999
+Ragnarok                               => +262143-12-31 23:59:59.999 --- +262143-12-31 23:59:59.999
+at 3:00 pm today                       => 1066-10-14 15:00:00 --- 1066-10-14 15:01:00
+5/6/69                                 => 0969-05-06 00:00:00 --- 0969-05-07 00:00:00
+Tuesday, May 6, 1969 at 3:52 AM        => 1969-05-06 03:52:00 --- 1969-05-06 03:53:00
+March 15, 44 BC                        => -0043-03-15 00:00:00 --- -0043-03-16 00:00:00
+Friday the 13th                        => 1066-07-13 00:00:00 --- 1066-07-14 00:00:00
+five minutes before and after midnight => 1066-10-13 23:55:00 --- 1066-10-14 00:05:00
 ```
 
 For the full grammar of time expressions, view the source of the `parse` function and
@@ -1180,15 +1186,33 @@ fn month_and_a_day(
     before: bool,
 ) -> Result<NaiveDate, TimeError> {
     if m.has("ordinal_day") {
-        let month = other_time.month();
-        return match NaiveDate::from_ymd_opt(config.now.year(), month, o_day(m, month)) {
-            Some(d) => Ok(d),
-            None => Err(TimeError::ImpossibleDate(format!(
-                "there is no day {} in the year {}",
-                m.as_str(),
-                config.now.year()
-            ))),
+        let mut year = config.now.year();
+        let mut month = other_time.month();
+        let day = o_day(m, month);
+        let wd = if let Some(a_day) = m.name("a_day") {
+            Some(weekday(a_day.as_str()))
+        } else {
+            None
         };
+        // search backwards through the calendar for a possible day
+        for _ in 0..4 * 7 * 12 {
+            if let Some(d) = NaiveDate::from_ymd_opt(year, month, day) {
+                if wd.is_none() || d.weekday() == wd.unwrap() {
+                    return Ok(d);
+                }
+            }
+            if month == 1 {
+                month = 12;
+                year -= 1;
+            } else {
+                month -= 1;
+            }
+        }
+        return Err(TimeError::ImpossibleDate(format!(
+            "there is no day {} in the year {}",
+            m.as_str(),
+            config.now.year()
+        )));
     }
     let (month, day) = if let Some(month) = m.name("n_month") {
         let month = n_month(month);

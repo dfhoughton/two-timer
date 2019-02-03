@@ -1264,7 +1264,10 @@ fn one_week_before_and_after_may_6_1969() {
     let d = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
     let d1 = d - Duration::days(7);
     let d2 = d + Duration::days(7);
-    let patterns = ["one week before and after May 6, 1969", "1 week before and after May 6, 1969"];
+    let patterns = [
+        "one week before and after May 6, 1969",
+        "1 week before and after May 6, 1969",
+    ];
     for p in patterns.iter() {
         match parse(p, None) {
             Ok((start, end, _)) => {
@@ -1412,6 +1415,36 @@ fn displacement() {
                     assert!(false, "didn't match");
                 }
             }
+        }
+    }
+}
+
+#[test]
+fn friday_the_13th() {
+    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1968, 12, 13).and_hms(0, 0, 0);
+    match parse("Friday the 13th", Some(Config::new().now(now))) {
+        Ok((start, _, _)) => {
+            assert_eq!(d1, start);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
+}
+
+#[test]
+fn the_31st() {
+    let now = NaiveDate::from_ymd(1969, 4, 10).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 3, 31).and_hms(0, 0, 0);
+    match parse("the 31st", Some(Config::new().now(now))) {
+        Ok((start, _, _)) => {
+            assert_eq!(d1, start);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
         }
     }
 }

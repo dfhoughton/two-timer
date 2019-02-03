@@ -22,3 +22,4 @@
 * better organization and documentation of grammar
 ## 1.06
 * added "before and after"
+* fixed "Friday the 13th" and "the 31st" to scan back through the calendar to the nearest match
