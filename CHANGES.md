@@ -16,3 +16,4 @@
 * added kalends, nones, ides
 * added March 5th, the fifth, etc.
 * added period before/after/around time
+* added noon and midnight

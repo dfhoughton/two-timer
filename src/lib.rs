@@ -221,7 +221,7 @@ lazy_static! {
         relative_day => <a_day> | <a_day_in_month>
 
         a_day_in_month => <ordinal_day> | <day_and_month>
-        ordinal_day -> ("the") <o_day>                    // the first
+        ordinal_day   -> <day_prefix>? ("the") <o_day>    // the first
         day_and_month -> <n_month> r("[./-]") <n_day>     // 5-6
         day_and_month -> <a_month> <o_n_day>              // June 5, June 5th, June fifth
         day_and_month -> ("the") <o_day> ("of") <a_month> // the 5th of June, the fifth of June
@@ -245,7 +245,7 @@ lazy_static! {
 
         modifier => [["this", "last", "next"]]
         adverb => [["now", "today", "tomorrow", "yesterday"]]
-        day_prefix => <a_day> (",")
+        day_prefix => <a_day> (",")?
         o_n_day => <n_day> | <o_day>
         at_time -> ("at") <time>
         at_time_on -> ("at")? <time> ("on")?
@@ -410,102 +410,8 @@ lazy_static! {
     };
 }
 lazy_static! {
+    #[doc(hidden)]
     pub static ref MATCHER: Matcher = GRAMMAR.matcher().unwrap();
-}
-
-/// A collection of parameters that can influence the interpretation
-/// of time expressions.
-#[derive(Debug, Clone)]
-pub struct Config {
-    now: NaiveDateTime,
-    monday_starts_week: bool,
-    period: Period,
-    pay_period_length: u32,
-    pay_period_start: Option<NaiveDate>,
-}
-
-impl Config {
-    /// Constructs an expression with the default parameters.
-    pub fn new() -> Config {
-        Config {
-            now: Local::now().naive_local(),
-            monday_starts_week: true,
-            period: Period::Minute,
-            pay_period_length: 7,
-            pay_period_start: None,
-        }
-    }
-    /// Returns a copy of the configuration parameters with the "now" moment
-    /// set to the parameter supplied.
-    pub fn now(&self, n: NaiveDateTime) -> Config {
-        let mut c = self.clone();
-        c.now = n;
-        c
-    }
-    fn period(&self, period: Period) -> Config {
-        let mut c = self.clone();
-        c.period = period;
-        c
-    }
-    /// Returns a copy of the configuration parameters with whether
-    /// Monday is regarded as the first day of the week set to the parameter
-    /// supplied. By default Monday *is* regarded as the first day. If this
-    /// parameter is set to `false`, Sunday will be regarded as the first weekday.
-    pub fn monday_starts_week(&self, monday_starts_week: bool) -> Config {
-        let mut c = self.clone();
-        c.monday_starts_week = monday_starts_week;
-        c
-    }
-    /// Returns a copy of the configuration parameters with the pay period
-    /// length in days set to the parameter supplied. The default pay period
-    /// length is 7 days.
-    pub fn pay_period_length(&self, pay_period_length: u32) -> Config {
-        let mut c = self.clone();
-        c.pay_period_length = pay_period_length;
-        c
-    }
-    /// Returns a copy of the configuration parameters with the reference start
-    /// date for a pay period set to the parameter supplied. By default this date
-    /// is undefined. Unless it is defined, expressions containing the phrase "pay period"
-    /// or "pp" cannot be interpreted.
-    pub fn pay_period_start(&self, pay_period_start: Option<NaiveDate>) -> Config {
-        let mut c = self.clone();
-        c.pay_period_start = pay_period_start;
-        c
-    }
-}
-
-/// A simple categorization of things that could go wrong.
-///
-/// Every error provides a descriptive string that can be displayed.
-#[derive(Debug, Clone)]
-pub enum TimeError {
-    /// The time expression cannot be parsed by the available grammar.
-    Parse(String),
-    /// The time expression consists of a time range and the end of the range is before
-    /// the beginning.
-    Misordered(String),
-    /// The time expression specifies an impossible date, such as the 31st of September.
-    ImpossibleDate(String),
-    /// The time expression specifies a weekday different from that required by the rest
-    /// of the expression, such as Wednesday, May 5, 1969, which was a Tuesday.
-    Weekday(String),
-    /// The time expression refers to a pay period, but the starting date of a reference
-    /// pay period has not been provided, so the pay period is undefined.
-    NoPayPeriod(String),
-}
-
-impl TimeError {
-    /// Extracts error message.
-    pub fn msg(&self) -> &str {
-        match self {
-            TimeError::Parse(s) => s.as_ref(),
-            TimeError::Misordered(s) => s.as_ref(),
-            TimeError::ImpossibleDate(s) => s.as_ref(),
-            TimeError::Weekday(s) => s.as_ref(),
-            TimeError::NoPayPeriod(s) => s.as_ref(),
-        }
-    }
 }
 
 /// Converts a time expression into a pair or timestamps and a boolean indicating whether
@@ -630,6 +536,101 @@ pub fn parse(
         }
     }
     unreachable!();
+}
+
+/// A collection of parameters that can influence the interpretation
+/// of time expressions.
+#[derive(Debug, Clone)]
+pub struct Config {
+    now: NaiveDateTime,
+    monday_starts_week: bool,
+    period: Period,
+    pay_period_length: u32,
+    pay_period_start: Option<NaiveDate>,
+}
+
+impl Config {
+    /// Constructs an expression with the default parameters.
+    pub fn new() -> Config {
+        Config {
+            now: Local::now().naive_local(),
+            monday_starts_week: true,
+            period: Period::Minute,
+            pay_period_length: 7,
+            pay_period_start: None,
+        }
+    }
+    /// Returns a copy of the configuration parameters with the "now" moment
+    /// set to the parameter supplied.
+    pub fn now(&self, n: NaiveDateTime) -> Config {
+        let mut c = self.clone();
+        c.now = n;
+        c
+    }
+    fn period(&self, period: Period) -> Config {
+        let mut c = self.clone();
+        c.period = period;
+        c
+    }
+    /// Returns a copy of the configuration parameters with whether
+    /// Monday is regarded as the first day of the week set to the parameter
+    /// supplied. By default Monday *is* regarded as the first day. If this
+    /// parameter is set to `false`, Sunday will be regarded as the first weekday.
+    pub fn monday_starts_week(&self, monday_starts_week: bool) -> Config {
+        let mut c = self.clone();
+        c.monday_starts_week = monday_starts_week;
+        c
+    }
+    /// Returns a copy of the configuration parameters with the pay period
+    /// length in days set to the parameter supplied. The default pay period
+    /// length is 7 days.
+    pub fn pay_period_length(&self, pay_period_length: u32) -> Config {
+        let mut c = self.clone();
+        c.pay_period_length = pay_period_length;
+        c
+    }
+    /// Returns a copy of the configuration parameters with the reference start
+    /// date for a pay period set to the parameter supplied. By default this date
+    /// is undefined. Unless it is defined, expressions containing the phrase "pay period"
+    /// or "pp" cannot be interpreted.
+    pub fn pay_period_start(&self, pay_period_start: Option<NaiveDate>) -> Config {
+        let mut c = self.clone();
+        c.pay_period_start = pay_period_start;
+        c
+    }
+}
+
+/// A simple categorization of things that could go wrong.
+///
+/// Every error provides a descriptive string that can be displayed.
+#[derive(Debug, Clone)]
+pub enum TimeError {
+    /// The time expression cannot be parsed by the available grammar.
+    Parse(String),
+    /// The time expression consists of a time range and the end of the range is before
+    /// the beginning.
+    Misordered(String),
+    /// The time expression specifies an impossible date, such as the 31st of September.
+    ImpossibleDate(String),
+    /// The time expression specifies a weekday different from that required by the rest
+    /// of the expression, such as Wednesday, May 5, 1969, which was a Tuesday.
+    Weekday(String),
+    /// The time expression refers to a pay period, but the starting date of a reference
+    /// pay period has not been provided, so the pay period is undefined.
+    NoPayPeriod(String),
+}
+
+impl TimeError {
+    /// Extracts error message.
+    pub fn msg(&self) -> &str {
+        match self {
+            TimeError::Parse(s) => s.as_ref(),
+            TimeError::Misordered(s) => s.as_ref(),
+            TimeError::ImpossibleDate(s) => s.as_ref(),
+            TimeError::Weekday(s) => s.as_ref(),
+            TimeError::NoPayPeriod(s) => s.as_ref(),
+        }
+    }
 }
 
 // for the end time, if the span is less than a day, use the first, otherwise use the second
