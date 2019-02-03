@@ -33,5 +33,7 @@ Some expressions it can handle:
 * noon on May 6, 1969
 * midnight on May 6, 1969
 * Friday the 13th
+* 2 weeks ago
+* ten seconds from now
 
 The complete API is available at https://docs.rs/two_timer/0.1.0/two_timer/.

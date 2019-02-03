@@ -207,7 +207,10 @@ lazy_static! {
 
         moment_or_period => <moment> | <period>
         period => <named_period> | <specific_period>
-        specific_period => <modified_period> | <month_and_year> | <year>
+        specific_period => <modified_period> | <month_and_year> | <year> | <relative_period>
+        relative_period -> <count> <displacement> <from_now_or_ago>
+        displacement => [["week", "day", "hour", "minute", "second"]] ("s")? // not handling variable-width periods like months or years
+        from_now_or_ago => [["from now", "ago"]]
         month_and_year -> <a_month> <year>
         named_period => <a_day> | <a_month>
         modified_period -> <modifier> <modifiable_period>
@@ -249,8 +252,8 @@ lazy_static! {
         o_n_day => <n_day> | <o_day>
         at_time -> ("at") <time>
         at_time_on -> ("at")? <time> ("on")?
-        time -> <hour_12> <am_pm>? | <hour_24> | <canonical_time>
-        canonical_time => [["noon", "midnight"]]
+        time -> <hour_12> <am_pm>? | <hour_24> | <named_time>
+        named_time => [["noon", "midnight"]]
         hour_24 => <h24>
         hour_24 => <h24> (":") <minute>
         hour_24 => <h24> (":") <minute> (":") <second>
@@ -785,6 +788,41 @@ fn handle_specific_period(
     moment: &Match,
     config: &Config,
 ) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+    if let Some(moment) = moment.name("relative_period") {
+        let count = count(moment.name("count").unwrap()) as i64;
+        let (displacement, period) = match moment
+            .name("displacement")
+            .unwrap()
+            .as_str()
+            .chars()
+            .nth(0)
+            .unwrap()
+        {
+            'w' | 'W' => (Duration::weeks(count), Period::Week),
+            'd' | 'D' => (Duration::days(count), Period::Day),
+            'h' | 'H' => (Duration::hours(count), Period::Hour),
+            'm' | 'M' => (Duration::minutes(count), Period::Minute),
+            's' | 'S' => (Duration::seconds(count), Period::Second),
+            _ => unreachable!(),
+        };
+        let d = match moment
+            .name("from_now_or_ago")
+            .unwrap()
+            .as_str()
+            .chars()
+            .nth(0)
+            .unwrap()
+        {
+            'a' | 'A' => config.now - displacement,
+            'f' | 'F' => config.now + displacement,
+            _ => unreachable!(),
+        };
+        let span = match period {
+            Period::Week => (d, d + Duration::weeks(1)),
+            _ => moment_to_period(d, &period, config)
+        };
+        return Ok(span);
+    }
     if let Some(moment) = moment.name("month_and_year") {
         let y = year(moment, &config.now);
         let m = a_month(moment);
@@ -1187,7 +1225,7 @@ fn a_month(m: &Match) -> u32 {
 // extract hour, minute, and second from time match
 // last parameter is basically whether the value returned is for "midnight", which requires special handling
 fn time(m: &Match) -> (u32, Option<u32>, Option<u32>, bool) {
-    if let Some(m) = m.name("canonical_time") {
+    if let Some(m) = m.name("named_time") {
         return match m.as_str().chars().nth(0).unwrap() {
             'n' | 'N' => (12, None, None, false),
             _ => (0, None, None, true),

@@ -1332,3 +1332,66 @@ fn midnight() {
         }
     }
 }
+
+#[derive(Debug)]
+enum Period {
+    Week,
+    Day,
+    Hour,
+    Minute,
+    Second,
+}
+
+#[test]
+fn displacement() {
+    let displacements = [
+        ("week", Period::Week),
+        ("day", Period::Day),
+        ("hour", Period::Hour),
+        ("minute", Period::Minute),
+        ("second", Period::Second),
+    ];
+    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    for (phrase, period) in displacements.iter() {
+        for n in [1, 2, 3].iter() {
+            let phrase = if *n == 1 {
+                String::from(*phrase)
+            } else {
+                String::from(*phrase) + "s"
+            };
+            let (displacement1, displacement2) = match period {
+                Period::Week => (Duration::weeks(*n), Duration::weeks(1)),
+                Period::Day => (Duration::days(*n), Duration::days(1)),
+                Period::Hour => (Duration::hours(*n), Duration::hours(1)),
+                Period::Minute => (Duration::minutes(*n), Duration::minutes(1)),
+                _ => (Duration::seconds(*n), Duration::seconds(1)),
+            };
+            let d1 = now - displacement1;
+            let d2 = d1 + displacement2;
+            let expression = format!("{} {} ago", n, phrase);
+            match parse(&expression, Some(Config::new().now(now))) {
+                Ok((start, end, _)) => {
+                    assert_eq!(d1, start);
+                    assert_eq!(d2, end);
+                }
+                Err(e) => {
+                    println!("{:?}", e);
+                    assert!(false, "didn't match");
+                }
+            }
+            let d1 = now + displacement1;
+            let d2 = d1 + displacement2;
+            let expression = format!("{} {} from now", n, phrase);
+            match parse(&expression, Some(Config::new().now(now))) {
+                Ok((start, end, _)) => {
+                    assert_eq!(d1, start);
+                    assert_eq!(d2, end);
+                }
+                Err(e) => {
+                    println!("{:?}", e);
+                    assert!(false, "didn't match");
+                }
+            }
+        }
+    }
+}

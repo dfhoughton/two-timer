@@ -17,3 +17,4 @@
 * added March 5th, the fifth, Friday the 13th, etc.
 * added period before/after/around time
 * added noon and midnight
+* added `<count>` `<periods>` from now/ago
