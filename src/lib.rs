@@ -269,7 +269,9 @@ lazy_static! {
 
         at_time -> ("at") <time>
 
-        specific_time => <first_time> | <last_time>
+        specific_time => <first_time> | <last_time> | <precise_time>
+
+        precise_time -> <n_date> <hour_24>
 
         time -> <hour_12> <am_pm>? | <hour_24> | <named_time>
 
@@ -723,6 +725,19 @@ fn specific(m: &Match) -> bool {
     m.has("specific_day") || m.has("specific_period") || m.has("specific_time")
 }
 
+fn n_date(date: &Match, config: &Config) -> Result<NaiveDate, TimeError> {
+    let year = year(date, &config.now);
+    let month = n_month(date);
+    let day = n_day(date);
+    match NaiveDate::from_ymd_opt(year, month, day) {
+        None => Err(TimeError::ImpossibleDate(format!(
+            "cannot construct date with year {}, month {}, and day {}",
+            year, month, day
+        ))),
+        Some(d) => Ok(d),
+    }
+}
+
 fn handle_specific_day(
     m: &Match,
     config: &Config,
@@ -764,16 +779,9 @@ fn handle_specific_day(
     }
     if let Some(date) = m.name("date_with_year") {
         if let Some(date) = date.name("n_date") {
-            let year = year(date, &now);
-            let month = n_month(date);
-            let day = n_day(date);
-            let d_opt = NaiveDate::from_ymd_opt(year, month, day);
-            return match d_opt {
-                None => Err(TimeError::ImpossibleDate(format!(
-                    "cannot construct date with year {}, month {}, and day {}",
-                    year, month, day
-                ))),
-                Some(d1) => {
+            return match n_date(date, config) {
+                Err(s) => Err(s),
+                Ok(d1) => {
                     let d1 = d1.and_hms(0, 0, 0);
                     Ok(moment_and_time(
                         &Config::new().now(d1).period(Period::Day),
@@ -1032,6 +1040,30 @@ fn handle_specific_time(
     moment: &Match,
     config: &Config,
 ) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+    if let Some(moment) = moment.name("precise_time") {
+        return match n_date(moment, config) {
+            Err(s) => Err(s),
+            Ok(d) => {
+                let (hour, minute, second, _) = time(moment);
+                let period = if second.is_some() {
+                    Period::Second
+                } else if minute.is_some() {
+                    Period::Minute
+                } else {
+                    Period::Hour
+                };
+                let m = d
+                    .and_hms(0, 0, 0)
+                    .with_hour(hour)
+                    .unwrap()
+                    .with_minute(minute.unwrap_or(0))
+                    .unwrap()
+                    .with_second(second.unwrap_or(0))
+                    .unwrap();
+                Ok(moment_to_period(m, &period, config))
+            }
+        };
+    }
     return if moment.has("first_time") {
         Ok(moment_to_period(first_moment(), &config.period, config))
     } else {

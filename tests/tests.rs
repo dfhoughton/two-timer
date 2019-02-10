@@ -1448,3 +1448,19 @@ fn the_31st() {
         }
     }
 }
+
+#[test]
+fn specific_time() {
+    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(12, 3, 5);
+    let d2 = d1 + Duration::seconds(1);
+    match parse("1969-05-06 12:03:05", None) {
+        Ok((start, end, _)) => {
+            assert_eq!(d1, start);
+            assert_eq!(d2, end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
+}
