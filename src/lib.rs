@@ -301,15 +301,15 @@ lazy_static! {
         // various phrases all meaning from the first measurable moment to the last
         a_count         => [["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]]
         adverb          => [["now", "today", "tomorrow", "yesterday"]]
-        am_pm           => (?-i) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
+        am_pm           => (?-ib) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
         bce             => (?-ib) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
         ce              => (?-ib) [["ce", "c.e.", "ad", "a.d.", "CE", "C.E.", "AD", "A.D."]]
         direction       -> [["before", "after", "around", "before and after"]]
         displacement    => [["week", "day", "hour", "minute", "second"]] ("s")?   // not handling variable-width periods like months or years
         from_now_or_ago => [["from now", "ago"]]
-        h12             => [(1..=12).into_iter().collect::<Vec<_>>()]
+        h12             => (?-B) [(1..=12).into_iter().collect::<Vec<_>>()]
         h24             => [(1..=24).into_iter().collect::<Vec<_>>()]
-        minute          => [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
+        minute          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
         modifier        => [["this", "last", "next"]]
         named_time      => [["noon", "midnight"]]
         n_year          => r(r"\b(?:[1-9][0-9]{0,4}|0)\b")
@@ -317,7 +317,7 @@ lazy_static! {
         unit            => [["week", "day", "hour", "minute", "second"]] ("s")?
         universal       => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
         up_to           => [["to", "until", "up to", "till"]]
-        second          => [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
+        second          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
         suffix_year     => r(r"\b[1-9][0-9]{0,4}")
         through         => [["up through", "through", "thru"]] | r("-+")
 

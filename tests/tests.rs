@@ -1464,3 +1464,19 @@ fn specific_time() {
         }
     }
 }
+
+#[test]
+fn no_space_before_pm() {
+    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(13, 0, 0);
+    let d2 = d1 + Duration::hours(1);
+    match parse("1969-05-06 at 1PM", None) {
+        Ok((start, end, _)) => {
+            assert_eq!(d1, start);
+            assert_eq!(d2, end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
+}

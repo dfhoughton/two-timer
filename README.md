@@ -16,6 +16,7 @@ Some expressions it can handle:
 * June 6, 2010
 * forever
 * 3:00 AM
+* 3AM
 * June '05
 * Monday through next Thursday
 * from mon at 15:00:05 to now

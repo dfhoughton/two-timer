@@ -25,3 +25,5 @@
 * fixed "Friday the 13th" and "the 31st" to scan back through the calendar to the nearest match
 ## 1.0.7
 * added `<specific_time>` pattern: e.g., 1969-05-06 12:03:05
+## 1.0.8
+* made the space between time and AM/PM optional
