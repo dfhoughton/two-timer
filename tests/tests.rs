@@ -1479,4 +1479,26 @@ fn no_space_before_pm() {
             assert!(false, "didn't match");
         }
     }
+    let d2 = d1 + Duration::minutes(1);
+    match parse("1969-05-06 at 1:00PM", None) {
+        Ok((start, end, _)) => {
+            assert_eq!(d1, start);
+            assert_eq!(d2, end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
+    let d2 = d1 + Duration::seconds(1);
+    match parse("1969-05-06 at 1:00:00PM", None) {
+        Ok((start, end, _)) => {
+            assert_eq!(d1, start);
+            assert_eq!(d2, end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
 }
