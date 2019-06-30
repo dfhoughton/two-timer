@@ -27,3 +27,7 @@
 * added `<specific_time>` pattern: e.g., 1969-05-06 12:03:05
 ## 1.0.8
 * made the space between time and AM/PM optional
+## 1.1.0
+* bumped lazy_static dependency
+## 1.2.0
+* added parsable function

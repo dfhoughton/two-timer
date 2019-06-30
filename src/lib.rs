@@ -464,6 +464,19 @@ lazy_static! {
     pub static ref MATCHER: Matcher = GRAMMAR.matcher().unwrap();
 }
 
+/// Simply returns whether the given phrase is parsable as a time expression.
+///
+/// # Examples
+///
+/// ```rust
+/// # extern crate two_timer;
+/// # use two_timer::{parsable};
+/// let copacetic = parsable("5/6/69");
+/// ```
+pub fn parsable(phrase: &str) -> bool {
+    GRAMMAR.rx().unwrap().is_match(phrase)
+}
+
 /// Converts a time expression into a pair or timestamps and a boolean indicating whether
 /// the expression was literally a range, such as "9 to 11", as opposed to "9 AM", say.
 ///

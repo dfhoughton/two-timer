@@ -1,6 +1,6 @@
 #![feature(test)]
 extern crate two_timer;
-use two_timer::{parse, Config};
+use two_timer::{parse, parsable, Config};
 extern crate chrono;
 use chrono::naive::NaiveDate;
 use chrono::{Duration, Local};
@@ -8,6 +8,11 @@ use chrono::{Duration, Local};
 // a debugging method to print out the parse tree
 fn show_me(p: &str) {
     println!("{}", two_timer::MATCHER.parse(p).unwrap());
+}
+
+#[test]
+fn can_use_parsable() {
+    assert!(parsable("2019/1/1"));
 }
 
 #[test]
