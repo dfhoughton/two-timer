@@ -31,3 +31,6 @@
 * bumped lazy_static dependency
 ## 1.2.0
 * added parsable function
+## 1.2.1
+* bumpled lazy_static and pidgin dependencies
+* use serialized matcher to avoid the cost of generating two_timer::GRAMMAR via the macro
