@@ -34,3 +34,4 @@
 ## 1.2.1
 * bumpled lazy_static and pidgin dependencies
 * use serialized matcher to avoid the cost of generating two_timer::GRAMMAR via the macro
+this cuts about 0.4 seconds off the startup time of two_timer on my machine, going from 0.85 seconds to 0.48 seconds
