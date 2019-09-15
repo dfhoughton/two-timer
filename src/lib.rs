@@ -478,7 +478,7 @@ lazy_static! {
 /// let copacetic = parsable("5/6/69");
 /// ```
 pub fn parsable(phrase: &str) -> bool {
-    GRAMMAR.rx().unwrap().is_match(phrase)
+    MATCHER.rx.is_match(phrase)
 }
 
 /// Converts a time expression into a pair or timestamps and a boolean indicating whether
