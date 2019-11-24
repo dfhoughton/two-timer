@@ -6,9 +6,9 @@ use chrono::naive::NaiveDate;
 use chrono::{Duration, Local};
 
 // a debugging method to print out the parse tree
-fn show_me(p: &str) {
-    println!("{}", two_timer::MATCHER.parse(p).unwrap());
-}
+// fn show_me(p: &str) {
+//     println!("{}", two_timer::MATCHER.parse(p).unwrap());
+// }
 
 #[test]
 fn can_use_parsable() {

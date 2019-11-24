@@ -1,5 +1,7 @@
 # Change Log
 
+## 1.3.0
+* adding small_grammar feature to further speed up common use case
 ## 1.2.1
 * bumpled lazy_static and pidgin dependencies
 * use serialized matcher to avoid the cost of generating two_timer::GRAMMAR via the macro;
