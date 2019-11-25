@@ -1,5 +1,7 @@
 # Change Log
 
+## 1.3.1
+* documentation fix
 ## 1.3.0
 * adding small_grammar feature to further speed up common use case
 ## 1.2.1
