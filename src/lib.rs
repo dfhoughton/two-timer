@@ -190,6 +190,7 @@ slower than the Perl version. To address this I added an optional feature to two
 
 ```toml
 [dependencies.two_timer]
+version = "~1.3.0"
 features = ["small_grammar"]
 ```
 
