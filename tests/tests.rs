@@ -1,6 +1,6 @@
 #![feature(test)]
 extern crate two_timer;
-use two_timer::{parse, parsable, Config};
+use two_timer::{parsable, parse, Config};
 extern crate chrono;
 use chrono::naive::NaiveDate;
 use chrono::{Duration, Local};
@@ -493,11 +493,29 @@ fn this_pay_period() {
         .now(now);
     let d1 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
-    let (start, end, _) = parse("this pay period", Some(config)).unwrap();
-    assert_eq!(d1, start);
-    assert_eq!(d2, end);
+    for pp in ["pp", "pay period", "payperiod"].iter() {
+        let (start, end, _) = parse(format!("this {}", pp), Some(config.clone())).unwrap();
+        assert_eq!(d1, start);
+        assert_eq!(d2, end);
+    }
 }
 
+#[test]
+fn bare_pay_period() {
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    // two-week pay period beginning about a year before "now" on a Sunday
+    let config = Config::new()
+        .pay_period_start(Some(NaiveDate::from_ymd(1968, 5, 5)))
+        .pay_period_length(14)
+        .now(now);
+    let d1 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let d2 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
+    for pp in ["pp", "pay period", "payperiod"].iter() {
+        let (start, end, _) = parse(pp, Some(config.clone())).unwrap();
+        assert_eq!(d1, start);
+        assert_eq!(d2, end);
+    }
+}
 #[test]
 fn next_pay_period() {
     let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
@@ -508,9 +526,11 @@ fn next_pay_period() {
         .now(now);
     let d1 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
-    let (start, end, _) = parse("next pay period", Some(config)).unwrap();
-    assert_eq!(d1, start);
-    assert_eq!(d2, end);
+    for pp in ["pp", "pay period", "payperiod"].iter() {
+        let (start, end, _) = parse(format!("next {}", pp), Some(config.clone())).unwrap();
+        assert_eq!(d1, start);
+        assert_eq!(d2, end);
+    }
 }
 
 #[test]
@@ -523,9 +543,11 @@ fn last_pay_period() {
         .now(now);
     let d1 = NaiveDate::from_ymd(1969, 4, 20).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
-    let (start, end, _) = parse("last pay period", Some(config)).unwrap();
-    assert_eq!(d1, start);
-    assert_eq!(d2, end);
+    for pp in ["pp", "pay period", "payperiod"].iter() {
+        let (start, end, _) = parse(format!("last {}", pp), Some(config.clone())).unwrap();
+        assert_eq!(d1, start);
+        assert_eq!(d2, end);
+    }
 }
 
 #[test]
@@ -538,9 +560,11 @@ fn this_pay_period_weird() {
         .now(now);
     let d1 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
-    let (start, end, _) = parse("this pay period", Some(config)).unwrap();
-    assert_eq!(d1, start);
-    assert_eq!(d2, end);
+    for pp in ["pp", "pay period", "payperiod"].iter() {
+        let (start, end, _) = parse(format!("this {}", pp), Some(config.clone())).unwrap();
+        assert_eq!(d1, start);
+        assert_eq!(d2, end);
+    }
 }
 
 #[test]
@@ -553,9 +577,11 @@ fn next_pay_period_weird() {
         .now(now);
     let d1 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
-    let (start, end, _) = parse("next pay period", Some(config)).unwrap();
-    assert_eq!(d1, start);
-    assert_eq!(d2, end);
+    for pp in ["pp", "pay period", "payperiod"].iter() {
+        let (start, end, _) = parse(format!("next {}", pp), Some(config.clone())).unwrap();
+        assert_eq!(d1, start);
+        assert_eq!(d2, end);
+    }
 }
 
 #[test]
@@ -568,9 +594,11 @@ fn last_pay_period_weird() {
         .now(now);
     let d1 = NaiveDate::from_ymd(1969, 4, 20).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
-    let (start, end, _) = parse("last pay period", Some(config)).unwrap();
-    assert_eq!(d1, start);
-    assert_eq!(d2, end);
+    for pp in ["pp", "pay period", "payperiod"].iter() {
+        let (start, end, _) = parse(format!("last {}", pp), Some(config.clone())).unwrap();
+        assert_eq!(d1, start);
+        assert_eq!(d2, end);
+    }
 }
 
 #[test]

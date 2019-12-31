@@ -1,5 +1,9 @@
 # Change Log
 
+## 1.3.2
+* removed serialized grammar as it made maintenance unwieldy
+* added "payperiod" as another synonym for "pay period"
+* adding bare "pay period" (also bear "week", "month", "year", and "weekend")
 ## 1.3.1
 * documentation fix
 ## 1.3.0
