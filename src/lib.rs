@@ -589,9 +589,7 @@ lazy_static! {
 /// # use two_timer::{parsable};
 /// let copacetic = parsable("5/6/69");
 /// ```
-pub fn parsable<T: ToString>(phrase: T) -> bool {
-    let p = phrase.to_string();
-    let phrase = &p;
+pub fn parsable(phrase: &str) -> bool {
     if cfg!(feature = "small_grammar") {
         SMALL_MATCHER.rx.is_match(phrase) || MATCHER.rx.is_match(phrase)
     } else {
@@ -612,12 +610,10 @@ pub fn parsable<T: ToString>(phrase: T) -> bool {
 /// # use two_timer::{parse, Config};
 /// let (reference_time, _, _) = parse("5/6/69", None).unwrap();
 /// ```
-pub fn parse<T: ToString>(
-    phrase: T,
+pub fn parse(
+    phrase: &str,
     config: Option<Config>,
 ) -> Result<(NaiveDateTime, NaiveDateTime, bool), TimeError> {
-    let p = phrase.to_string();
-    let phrase = &p;
     let parse = if cfg!(feature = "small_grammar") {
         SMALL_MATCHER
             .parse(phrase)

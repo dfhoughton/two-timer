@@ -1,5 +1,7 @@
 # Change Log
 
+## 1.3.3
+* revert `ToString` to `&str` for greater efficiency
 ## 1.3.2
 * removed serialized grammar as it made maintenance unwieldy
 * added "payperiod" as another synonym for "pay period"

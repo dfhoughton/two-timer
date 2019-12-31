@@ -494,7 +494,7 @@ fn this_pay_period() {
     let d1 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
     for pp in ["pp", "pay period", "payperiod"].iter() {
-        let (start, end, _) = parse(format!("this {}", pp), Some(config.clone())).unwrap();
+        let (start, end, _) = parse(format!("this {}", pp).as_ref(), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
         assert_eq!(d2, end);
     }
@@ -527,7 +527,7 @@ fn next_pay_period() {
     let d1 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
     for pp in ["pp", "pay period", "payperiod"].iter() {
-        let (start, end, _) = parse(format!("next {}", pp), Some(config.clone())).unwrap();
+        let (start, end, _) = parse(&format!("next {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
         assert_eq!(d2, end);
     }
@@ -544,7 +544,7 @@ fn last_pay_period() {
     let d1 = NaiveDate::from_ymd(1969, 4, 20).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
     for pp in ["pp", "pay period", "payperiod"].iter() {
-        let (start, end, _) = parse(format!("last {}", pp), Some(config.clone())).unwrap();
+        let (start, end, _) = parse(&format!("last {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
         assert_eq!(d2, end);
     }
@@ -561,7 +561,7 @@ fn this_pay_period_weird() {
     let d1 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
     for pp in ["pp", "pay period", "payperiod"].iter() {
-        let (start, end, _) = parse(format!("this {}", pp), Some(config.clone())).unwrap();
+        let (start, end, _) = parse(&format!("this {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
         assert_eq!(d2, end);
     }
@@ -578,7 +578,7 @@ fn next_pay_period_weird() {
     let d1 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
     for pp in ["pp", "pay period", "payperiod"].iter() {
-        let (start, end, _) = parse(format!("next {}", pp), Some(config.clone())).unwrap();
+        let (start, end, _) = parse(&format!("next {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
         assert_eq!(d2, end);
     }
@@ -595,7 +595,7 @@ fn last_pay_period_weird() {
     let d1 = NaiveDate::from_ymd(1969, 4, 20).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
     for pp in ["pp", "pay period", "payperiod"].iter() {
-        let (start, end, _) = parse(format!("last {}", pp), Some(config.clone())).unwrap();
+        let (start, end, _) = parse(&format!("last {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
         assert_eq!(d2, end);
     }
