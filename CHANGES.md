@@ -1,5 +1,7 @@
 # Change Log
 
+## 1.3.4
+* fixed panic when parsing "24"
 ## 1.3.3
 * revert `ToString` to `&str` for greater efficiency
 ## 1.3.2

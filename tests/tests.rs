@@ -1535,3 +1535,9 @@ fn no_space_before_pm() {
         }
     }
 }
+
+#[test]
+fn relative_time_regression() {
+    parse("24", None).unwrap();
+    assert!(true, "'24' didn't cause a panic");
+}

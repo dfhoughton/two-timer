@@ -1470,7 +1470,12 @@ fn time(m: &Match) -> (u32, Option<u32>, Option<u32>, bool) {
         };
     }
     let hour = if let Some(hour_24) = m.name("hour_24") {
-        s_to_n(hour_24.name("h24").unwrap().as_str())
+        let hour = s_to_n(hour_24.name("h24").unwrap().as_str());
+        if hour == 24 {
+            0
+        } else {
+            hour
+        }
     } else if let Some(hour_12) = m.name("hour_12") {
         let mut hour = s_to_n(hour_12.name("h12").unwrap().as_str());
         hour = if let Some(am_pm) = m.name("am_pm") {
