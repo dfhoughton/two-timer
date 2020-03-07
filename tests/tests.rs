@@ -88,7 +88,7 @@ fn day_5_6_69_at_3_30_pm() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::minutes(1), end);
+        assert_eq!(then + Duration::seconds(1), end);
     }
 }
 
@@ -105,7 +105,7 @@ fn day_5_6_69_at_3_pm() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::hours(1), end);
+        assert_eq!(then + Duration::seconds(1), end);
     }
 }
 
@@ -167,7 +167,7 @@ fn at_3_pm() {
     for phrase in ["3 PM", "3 pm", "15"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::hours(1), end);
+        assert_eq!(then + Duration::seconds(1), end);
     }
 }
 
@@ -178,7 +178,7 @@ fn at_3_00_pm() {
     for phrase in ["3:00 PM", "3:00 pm", "15:00"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::minutes(1), end);
+        assert_eq!(then + Duration::seconds(1), end);
     }
 }
 
@@ -200,7 +200,7 @@ fn at_3_pm_yesterday() {
     for phrase in ["3 PM yesterday", "3 pm yesterday", "15 yesterday"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::hours(1), end);
+        assert_eq!(then + Duration::seconds(1), end);
     }
 }
 
@@ -776,7 +776,7 @@ fn friday_at_3_pm() {
     let then = NaiveDate::from_ymd(1969, 5, 2).and_hms(15, 0, 0);
     let (start, end, _) = parse("Friday at 3 pm", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::hours(1), end);
+    assert_eq!(then + Duration::seconds(1), end);
 }
 
 #[test]
@@ -785,7 +785,7 @@ fn tuesday_at_3_pm() {
     let then = NaiveDate::from_ymd(1969, 4, 29).and_hms(15, 0, 0);
     let (start, end, _) = parse("Tuesday at 3 pm", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::hours(1), end);
+    assert_eq!(then + Duration::seconds(1), end);
 }
 
 #[test]
@@ -794,7 +794,7 @@ fn monday_at_3_pm() {
     let then = NaiveDate::from_ymd(1969, 5, 5).and_hms(15, 0, 0);
     let (start, end, _) = parse("Monday at 3 pm", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::hours(1), end);
+    assert_eq!(then + Duration::seconds(1), end);
 }
 
 #[test]
@@ -851,7 +851,7 @@ fn tuesday_through_friday() {
 fn tuesday_through_3_pm_on_friday() {
     let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
     let d1 = NaiveDate::from_ymd(1969, 4, 29).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 2).and_hms(15, 0, 0);
+    let d2 = NaiveDate::from_ymd(1969, 5, 2).and_hms(15, 0, 1);
     let (start, end, _) = parse(
         "Tuesday through 3 PM on Friday",
         Some(Config::new().now(now)),
@@ -867,6 +867,56 @@ fn this_year_through_today() {
     let d1 = NaiveDate::from_ymd(1969, 1, 1).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 7).and_hms(0, 0, 0);
     let (start, end, _) = parse("this year through today", Some(Config::new().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn noon_yesterday_through_midnight_today() {
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(12, 0, 0);
+    let d2 = NaiveDate::from_ymd(1969, 5, 7).and_hms(0, 0, 1);
+    let (start, end, _) = parse(
+        "noon yesterday through midnight today",
+        Some(Config::new().now(now)),
+    )
+    .unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn very_specific_through_very_specific() {
+    let d1 = NaiveDate::from_ymd(2014, 10, 6).and_hms(8, 57, 29);
+    let d2 = NaiveDate::from_ymd(2020, 3, 6).and_hms(17, 28, 34);
+    let (start, end, _) = parse("2014-10-06 08:57:29 - 2020-03-06 17:28:33", None).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn very_specific_up_to_very_specific() {
+    let d1 = NaiveDate::from_ymd(2014, 10, 6).and_hms(8, 57, 29);
+    let d2 = NaiveDate::from_ymd(2020, 3, 6).and_hms(17, 28, 33);
+    let (start, end, _) = parse("2014-10-06 08:57:29 up to 2020-03-06 17:28:33", None).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn somewhat_specific_through_somewhat_specific() {
+    let d1 = NaiveDate::from_ymd(2014, 10, 6).and_hms(8, 57, 00);
+    let d2 = NaiveDate::from_ymd(2020, 3, 6).and_hms(17, 28, 01);
+    let (start, end, _) = parse("2014-10-06 08:57 - 2020-03-06 17:28", None).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn somewhat_specific_up_to_somewhat_specific() {
+    let d1 = NaiveDate::from_ymd(2014, 10, 6).and_hms(8, 57, 00);
+    let d2 = NaiveDate::from_ymd(2020, 3, 6).and_hms(17, 28, 00);
+    let (start, end, _) = parse("2014-10-06 08:57 up to 2020-03-06 17:28", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
 }
@@ -1084,7 +1134,7 @@ fn next_weekend_on_saturday_when_sunday_starts_week() {
 #[test]
 fn regression_12pm() {
     let d1 = NaiveDate::from_ymd(2018, 5, 21).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(2018, 5, 21).and_hms(1, 0, 0);
+    let d2 = d1 + Duration::seconds(1);
     if let Ok((start, end, _)) = parse("12 pm on May 21, 2018", None) {
         assert_eq!(d1, start);
         assert_eq!(d2, end);
@@ -1241,7 +1291,14 @@ fn day_and_month() {
     let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
     let d1 = NaiveDate::from_ymd(1969, 5, 15).and_hms(0, 0, 0);
     let d2 = d1 + Duration::days(1);
-    let patterns = ["the ides of May", "5-15", "the fifteenth", "May fifteenth"];
+    let patterns = [
+        "the ides of May",
+        "5-15",
+        "the fifteenth",
+        "May fifteenth",
+        "May the 15th",
+        "May the fifteenth",
+    ];
     for p in patterns.iter() {
         match parse(p, Some(Config::new().now(now))) {
             Ok((start, end, _)) => {
@@ -1360,7 +1417,7 @@ fn number_before_test() {
 #[test]
 fn noon() {
     let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(12, 0, 0);
-    let d2 = d1 + Duration::hours(1);
+    let d2 = d1 + Duration::seconds(1);
     match parse("noon on May 6, 1969", None) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1376,7 +1433,7 @@ fn noon() {
 #[test]
 fn midnight() {
     let d1 = NaiveDate::from_ymd(1969, 5, 7).and_hms(0, 0, 0);
-    let d2 = d1 + Duration::hours(1);
+    let d2 = d1 + Duration::seconds(1);
     match parse("midnight on May 6, 1969", None) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1501,7 +1558,7 @@ fn specific_time() {
 #[test]
 fn no_space_before_pm() {
     let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(13, 0, 0);
-    let d2 = d1 + Duration::hours(1);
+    let d2 = d1 + Duration::seconds(1);
     match parse("1969-05-06 at 1PM", None) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1512,7 +1569,6 @@ fn no_space_before_pm() {
             assert!(false, "didn't match");
         }
     }
-    let d2 = d1 + Duration::minutes(1);
     match parse("1969-05-06 at 1:00PM", None) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1523,7 +1579,6 @@ fn no_space_before_pm() {
             assert!(false, "didn't match");
         }
     }
-    let d2 = d1 + Duration::seconds(1);
     match parse("1969-05-06 at 1:00:00PM", None) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);

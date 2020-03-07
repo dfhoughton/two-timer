@@ -327,7 +327,7 @@ lazy_static! {
         o_day => <n_ordinal> | <a_ordinal> | <roman>
 
         day_and_month -> <n_month> r("[./-]") <n_day>     // 5-6
-        day_and_month -> <a_month> <o_n_day>              // June 5, June 5th, June fifth
+        day_and_month -> <a_month> ("the")? <o_n_day>     // June 5, June 5th, June fifth, June the fifth
         day_and_month -> ("the") <o_day> ("of") <a_month> // the 5th of June, the fifth of June
 
         o_n_day => <n_day> | <o_day>
@@ -345,7 +345,7 @@ lazy_static! {
         displacement    => [["week", "day", "hour", "minute", "second"]] ("s")?   // not handling variable-width periods like months or years
         from_now_or_ago => [["from now", "ago"]]
         h12             => (?-B) [(1..=12).into_iter().collect::<Vec<_>>()]
-        h24             => [(1..=24).into_iter().collect::<Vec<_>>()]
+        h24             => [(1..=24).into_iter().flat_map(|i| vec![format!("{}", i), format!("{:02}", i)]).collect::<Vec<_>>()]
         minute          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
         modifier        => [["this", "last", "next"]]
         named_time      => [["noon", "midnight"]]
@@ -825,9 +825,7 @@ impl TimeError {
 // for the end time, if the span is less than a day, use the first, otherwise use the second
 // e.g., Monday through Friday at 3 PM should end at 3 PM, but Monday through Friday should end at the end of Friday
 fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDateTime {
-    if d1.day() == d2.day() && d1.month() == d2.month() && d1.year() == d2.year() {
-        d1
-    } else if through {
+    if through {
         d2
     } else {
         d1
@@ -1188,22 +1186,15 @@ fn handle_specific_time(
             Err(s) => Err(s),
             Ok(d) => {
                 let (hour, minute, second, _) = time(moment);
-                let period = if second.is_some() {
-                    Period::Second
-                } else if minute.is_some() {
-                    Period::Minute
-                } else {
-                    Period::Hour
-                };
                 let m = d
                     .and_hms(0, 0, 0)
                     .with_hour(hour)
                     .unwrap()
-                    .with_minute(minute.unwrap_or(0))
+                    .with_minute(minute)
                     .unwrap()
-                    .with_second(second.unwrap_or(0))
+                    .with_second(second)
                     .unwrap();
-                Ok(moment_to_period(m, &period, config))
+                Ok(moment_to_period(m, &Period::Second, config))
             }
         };
     }
@@ -1237,25 +1228,18 @@ fn handle_one_time(
 fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (NaiveDateTime, NaiveDateTime) {
     if let Some(daytime) = daytime {
         let (hour, minute, second, is_midnight) = time(daytime);
-        let period = if second.is_some() {
-            Period::Second
-        } else if minute.is_some() {
-            Period::Minute
-        } else {
-            Period::Hour
-        };
         let mut m = config
             .now
             .with_hour(hour)
             .unwrap()
-            .with_minute(minute.unwrap_or(0))
+            .with_minute(minute)
             .unwrap()
-            .with_second(second.unwrap_or(0))
+            .with_second(second)
             .unwrap();
         if is_midnight {
             m = m + Duration::days(1); // midnight is second 0 *of the next day*
         }
-        moment_to_period(m, &period, config)
+        moment_to_period(m, &Period::Second, config)
     } else {
         moment_to_period(config.now, &config.period, config)
     }
@@ -1294,19 +1278,12 @@ fn relative_moment(
     }
     if let Some(t) = m.name("time") {
         let (hour, minute, second, is_midnight) = time(t);
-        let period = if second.is_some() {
-            Period::Second
-        } else if minute.is_some() {
-            Period::Minute
-        } else {
-            Period::Hour
-        };
         let mut t = other_time
             .with_hour(hour)
             .unwrap()
-            .with_minute(minute.unwrap_or(0))
+            .with_minute(minute)
             .unwrap()
-            .with_second(second.unwrap_or(0))
+            .with_second(second)
             .unwrap();
         if is_midnight {
             t = t + Duration::days(1); // midnight is second 0 *of the next day*
@@ -1316,7 +1293,7 @@ fn relative_moment(
         } else if !before && t < *other_time {
             t = t + Duration::days(1);
         }
-        return Ok(moment_to_period(t, &period, config));
+        return Ok(moment_to_period(t, &Period::Second, config));
     }
     if let Some(month) = m.name("a_month") {
         let month = a_month(month);
@@ -1427,7 +1404,7 @@ fn specific_moment(
     m: &Match,
     config: &Config,
 ) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
-    if let Some(m) = m.name("specific_day") {
+    if m.has("specific_day") {
         return handle_specific_day(m, config);
     }
     if let Some(m) = m.name("specific_period") {
@@ -1462,11 +1439,11 @@ fn a_month(m: &Match) -> u32 {
 
 // extract hour, minute, and second from time match
 // last parameter is basically whether the value returned is for "midnight", which requires special handling
-fn time(m: &Match) -> (u32, Option<u32>, Option<u32>, bool) {
+fn time(m: &Match) -> (u32, u32, u32, bool) {
     if let Some(m) = m.name("named_time") {
         return match m.as_str().chars().nth(0).unwrap() {
-            'n' | 'N' => (12, None, None, false),
-            _ => (0, None, None, true),
+            'n' | 'N' => (12, 0, 0, false),
+            _ => (0, 0, 0, true),
         };
     }
     let hour = if let Some(hour_24) = m.name("hour_24") {
@@ -1498,12 +1475,12 @@ fn time(m: &Match) -> (u32, Option<u32>, Option<u32>, bool) {
         let minute = s_to_n(minute.as_str());
         if let Some(second) = m.name("second") {
             let second = s_to_n(second.as_str());
-            (hour, Some(minute), Some(second), false)
+            (hour, minute, second, false)
         } else {
-            (hour, Some(minute), None, false)
+            (hour, minute, 0, false)
         }
     } else {
-        (hour, None, None, false)
+        (hour, 0, 0, false)
     }
 }
 

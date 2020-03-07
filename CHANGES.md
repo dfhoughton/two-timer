@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.0.0 *2020-3-7*
+* fixing specific time to specific time pattern: "noon yesterday through midnight today"
+* allow parsing of hours with leading 0; e.g., "08:57:29"
+* added "month the nth" pattern -- "July the 4th", "November the Fifth"
+* ***IMPORTANT*** changing the nature of daytimes -- "3 PM", "13:14" -- so their period is always 1 second; this seems
+more intuitively correct to me, but it changes the semantics sufficiently that I thought it necessary to bump the major version number
 ## 1.3.4
 * fixed panic when parsing "24"
 ## 1.3.3
