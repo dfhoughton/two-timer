@@ -1,6 +1,6 @@
 # Change Log
 
-## 2.1.0
+## 2.1.0 *2020-5-17*
 * added since expressions: "since yesterday", "since the beginning of the month", "since the end of last year", "after midnight", ...
 * added "the" as a synonym of "this" as a period modifier: "the beginning of the month" = "the beginning of this month"
 ## 2.0.0 *2020-3-7*
