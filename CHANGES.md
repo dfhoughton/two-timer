@@ -1,5 +1,8 @@
 # Change Log
 
+## 2.1.0
+* added since expressions: "since yesterday", "since the beginning of the month", "since the end of last year", "after midnight", ...
+* added "the" as a synonym of "this" as a period modifier: "the beginning of the month" = "the beginning of this month"
 ## 2.0.0 *2020-3-7*
 * fixing specific time to specific time pattern: "noon yesterday through midnight today"
 * allow parsing of hours with leading 0; e.g., "08:57:29"

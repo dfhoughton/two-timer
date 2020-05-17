@@ -38,5 +38,7 @@ Some expressions it can handle:
 * ten seconds from now
 * 5 minutes before and after midnight
 * 1969-05-06 12:03:05
+* since the start of the year
+* since yesterday
 
-The complete API is available at https://docs.rs/two_timer/0.1.0/two_timer/.
+The complete API is available at https://docs.rs/two_timer/.

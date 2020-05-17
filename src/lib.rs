@@ -102,7 +102,7 @@ are
 2. a relative expression will be interpreted as appropriate given its order -- the second expression
 describes a time after the first
 3. if neither expression is fully-specified, the first will be interpreted relative to "now" and the
-second relative ot the first
+second relative to the first
 
 The rules of interpretation for relative time expressions in ranges will likely be refined further
 in the future.
@@ -248,7 +248,13 @@ lazy_static! {
 
         one_time => <moment_or_period>
 
-        two_times -> ("from")? <moment_or_period> <to> <moment_or_period>
+        two_times -> ("from")? <moment_or_period> <to> <moment_or_period> | <since_time>
+
+        since_time -> <since> <clusivity>? <moment_or_period>
+
+        clusivity -> ("the") <terminus> ("of")
+
+        terminus => <beginning> | <end>
 
         to => <up_to> | <through>
 
@@ -340,17 +346,20 @@ lazy_static! {
         adverb          => [["now", "today", "tomorrow", "yesterday"]]
         am_pm           => (?-ib) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
         bce             => (?-ib) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
+        beginning       => [["beginning", "start"]]
         ce              => (?-ib) [["ce", "c.e.", "ad", "a.d.", "CE", "C.E.", "AD", "A.D."]]
         direction       -> [["before", "after", "around", "before and after"]]
         displacement    => [["week", "day", "hour", "minute", "second"]] ("s")?   // not handling variable-width periods like months or years
+        end             => ("end")
         from_now_or_ago => [["from now", "ago"]]
         h12             => (?-B) [(1..=12).into_iter().collect::<Vec<_>>()]
         h24             => [(1..=24).into_iter().flat_map(|i| vec![format!("{}", i), format!("{:02}", i)]).collect::<Vec<_>>()]
         minute          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
-        modifier        => [["this", "last", "next"]]
+        modifier        => [["the", "this", "last", "next"]]
         named_time      => [["noon", "midnight"]]
         n_year          => r(r"\b(?:[1-9][0-9]{0,4}|0)\b")
         roman           => [["nones", "ides", "kalends"]]
+        since           => [["since", "after"]]
         unit            => [["week", "day", "hour", "minute", "second"]] ("s")?
         universal       => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
         up_to           => [["to", "until", "up to", "till"]]
@@ -548,7 +557,7 @@ lazy_static! {
 
         // various phrases all meaning from the first measurable moment to the last
         adverb          => [["now", "today", "yesterday"]]
-        modifier        => [["this", "last"]]
+        modifier        => [["the", "this", "last"]]
 
         a_day => [
                 "Sunday Monday Tuesday Wednesday Thursday Friday Saturday Tues Weds Thurs Tues. Weds. Thurs."
@@ -647,6 +656,55 @@ pub fn parse(
         };
     }
     if let Some(two_times) = parse.name("two_times") {
+        let mut inclusive = two_times.has("beginning");
+        let exclusive = !inclusive && two_times.has("end"); // note this is *explicitly* exclusive
+        if !(inclusive || exclusive) && (two_times.has("time") || two_times.has("precise_time")) {
+            // treating "since noon" as including 12:00:00 and "since 2am" as including 14:00:00
+            inclusive = true;
+        }
+        if let Some(previous_time) = two_times.name("since_time") {
+            if specific(previous_time) {
+                return match specific_moment(previous_time, &config) {
+                    Ok((d1, d2)) => {
+                        let t = if inclusive { d1 } else { d2 };
+                        // if *implicitly* exclusive and we find things misordered, we become inclusive
+                        let t = if !(inclusive || exclusive) && t > config.now {
+                            d1
+                        } else {
+                            t
+                        };
+                        if t > config.now {
+                            Err(TimeError::Misordered(format!(
+                                "the inferred times, {} and {}, are misordered",
+                                t, config.now
+                            )))
+                        } else {
+                            Ok((t, config.now.clone(), false))
+                        }
+                    }
+                    Err(s) => Err(s),
+                };
+            }
+            return match relative_moment(previous_time, &config, &config.now, true) {
+                Ok((d1, d2)) => {
+                    let t = if inclusive { d1 } else { d2 };
+                    let t = if !(inclusive || exclusive) && t > config.now {
+                        d1
+                    } else {
+                        t
+                    };
+                    if t > config.now {
+                        Err(TimeError::Misordered(format!(
+                            "the inferred times, {} and {}, are misordered",
+                            t, config.now
+                        )))
+                    } else {
+                        Ok((t, config.now.clone(), false))
+                    }
+                }
+                Err(s) => Err(s),
+            };
+        }
         let first = &two_times.children().unwrap()[0];
         let last = &two_times.children().unwrap()[2];
         let is_through = two_times.has("through");

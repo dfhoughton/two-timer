@@ -1,6 +1,6 @@
 #![feature(test)]
 extern crate two_timer;
-use two_timer::{parsable, parse, Config};
+use two_timer::{parsable, parse, Config, TimeError};
 extern crate chrono;
 use chrono::naive::NaiveDate;
 use chrono::{Duration, Local};
@@ -417,6 +417,16 @@ fn this_week() {
     let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
     let (start, end, _) = parse("this week", Some(Config::new().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn the_week() {
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let (start, end, _) = parse("the week", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
 }
@@ -1428,6 +1438,17 @@ fn noon() {
             assert!(false, "didn't match");
         }
     }
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    match parse("noon on May 6, 1969", Some(Config::new().now(now))) {
+        Ok((start, end, _)) => {
+            assert_eq!(d1, start, "'noon' is the same as 'noon today'");
+            assert_eq!(d2, end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
 }
 
 #[test]
@@ -1595,4 +1616,89 @@ fn no_space_before_pm() {
 fn relative_time_regression() {
     parse("24", None).unwrap();
     assert!(true, "'24' didn't cause a panic");
+}
+
+#[test]
+fn since_yesterday() {
+    let then = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let now = then + Duration::hours(5);
+    match parse("since yesterday", Some(Config::new().now(now))) {
+        Ok((start, end, two_times)) => {
+            assert!(!two_times, "isn't a two-time expression");
+            assert!(then == start);
+            assert!(now == end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
+}
+
+#[test]
+fn since_noon() {
+    let then = NaiveDate::from_ymd(1969, 5, 10).and_hms(12, 0, 0);
+    let now = then + Duration::hours(5);
+    for expr in &[
+        "since noon",
+        "since noon today",
+        "since 12",
+        "since 12am",
+        "since 12am today",
+        "since 12:00",
+        "since 12:00:00",
+    ] {
+        match parse(expr, Some(Config::new().now(now))) {
+            Ok((start, end, two_times)) => {
+                assert!(!two_times, "isn't a two-time expression");
+                assert!(then == start);
+                assert!(now == end);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                assert!(false, "didn't match");
+            }
+        }
+    }
+}
+
+#[test]
+fn since_may() {
+    let then = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let now = then + Duration::hours(5);
+    for expr in &[
+        "since may",
+        "since the start of may",
+        "since the beginning of may",
+        "after may",
+        "after the start of may",
+        "after the beginning of may",
+    ] {
+        match parse(expr, Some(Config::new().now(now))) {
+            Ok((start, end, two_times)) => {
+                assert!(!two_times, "isn't a two-time expression");
+                assert!(then == start);
+                assert!(now == end);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                assert!(false, "didn't match");
+            }
+        }
+    }
+}
+
+#[test]
+fn since_the_end_of_may_misordered() {
+    let then = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let now = then + Duration::hours(5);
+    for expr in &["since the end of may", "after the end of may"] {
+        match parse(expr, Some(Config::new().now(now))) {
+            Ok((..)) => assert!(false, "this should not succeed"),
+            Err(e) => match e {
+                TimeError::Misordered(_) => assert!(true, "correct error"),
+                _ => assert!(false, format!("unexpected error: {:?}", e)),
+            },
+        }
+    }
 }
