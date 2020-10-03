@@ -1,5 +1,7 @@
 # Change Log
 
+## 2.2.0
+* adding `default_to_past` configuration parameter to allow people to interpret relative times like "Tuesday" as the nearest such moment in the future rather than the past
 ## 2.1.0 *2020-5-17*
 * added since expressions: "since yesterday", "since the beginning of the month", "since the end of last year", "after midnight", ...
 * added "the" as a synonym of "this" as a period modifier: "the beginning of the month" = "the beginning of this month"

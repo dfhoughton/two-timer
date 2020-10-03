@@ -4,13 +4,11 @@ This crate provides a `parse` function to convert English time expressions into 
 of timestamps representing a time range. It converts "today" into the first and last
 moments of today, "May 6, 1968" into the first and last moments of that day, "last year"
 into the first and last moments of that year, and so on. It does this even for expressions
-generally interpreted as referring to a point in time, such as "3 PM". In these cases
-the width of the time span varies according to the specificity of the expression. "3 PM" has
-a granularity of an hour, "3:00 PM", of a minute, "3:00:00 PM", of a second. For pointwise
-expression the first moment is the point explicitly named. The `parse` expression actually
-returns a 3-tuple consisting of the two timestamps and whether the expression is literally
-a range -- two time expressions separated by a preposition such as "to", "through", "up to",
-or "until".
+generally interpreted as referring to a point in time, such as "3 PM", though for these it
+always assumes a granularity of one second. For pointwise expression the first moment is the
+point explicitly named. The `parse` expression actually returns a 3-tuple consisting of the
+two timestamps and whether the expression is literally a range -- two time expressions
+separated by a preposition such as "to", "through", "up to", or "until".
 
 # Example
 
@@ -103,6 +101,8 @@ are
 describes a time after the first
 3. if neither expression is fully-specified, the first will be interpreted relative to "now" and the
 second relative to the first
+4. a moment interpreted relative to "now" will be assumed to be before now unless the configuration
+parameter `default_to_past` is set to `false`, in which case it will be assumed to be after now
 
 The rules of interpretation for relative time expressions in ranges will likely be refined further
 in the future.
@@ -117,8 +117,9 @@ more natural interpretation might be "3:00 PM to 4:00 PM".
 
 Since it is common to abbreviate years to the last two digits of the century, two-digit
 years will be interpreted as abbreviated unless followed by a suffix such as "B.C.E." or "AD".
-They will be interpreted as the the nearest appropriate *previous* year to the current moment,
-so in 2010 "'11" will be interpreted as 1911, not 2011.
+They will be interpreted by default as the the nearest appropriate *previous* year to the current moment,
+so in 2010 "'11" will be interpreted as 1911, not 2011. If you set the configuration parameter
+`default_to_past` to `false` this is reversed, so "'11" in 2020 will be interpreted as 2111.
 
 # The Second Time in Ranges
 
@@ -190,7 +191,7 @@ slower than the Perl version. To address this I added an optional feature to two
 
 ```toml
 [dependencies.two_timer]
-version = "~1.3.0"
+version = "~2.2"
 features = ["small_grammar"]
 ```
 
@@ -764,8 +765,8 @@ pub fn parse(
                 Err(s) => Err(s),
             };
         } else {
-            // the first moment is assumed to be before now
-            return match relative_moment(first, &config, &config.now, true) {
+            // the first moment is assumed to be before now if default_to_past is true, otherwise it is after
+            return match relative_moment(first, &config, &config.now, config.default_to_past) {
                 Ok((d1, d2)) => {
                     let (d1, _) = adjust(d1, d2, first);
                     // the second moment is necessarily after the first moment
@@ -794,6 +795,7 @@ pub struct Config {
     period: Period,
     pay_period_length: u32,
     pay_period_start: Option<NaiveDate>,
+    default_to_past: bool,
 }
 
 impl Config {
@@ -805,6 +807,7 @@ impl Config {
             period: Period::Minute,
             pay_period_length: 7,
             pay_period_start: None,
+            default_to_past: true,
         }
     }
     /// Returns a copy of the configuration parameters with the "now" moment
@@ -843,6 +846,16 @@ impl Config {
     pub fn pay_period_start(&self, pay_period_start: Option<NaiveDate>) -> Config {
         let mut c = self.clone();
         c.pay_period_start = pay_period_start;
+        c
+    }
+    /// Returns a copy of the configuration parameters with the `default_to_past`
+    /// parameter set as specified. This allows the interpretation of relative time expressions
+    /// like "Friday" and "12:00". By default, these expressions are assumed to refer to the
+    /// most recent such interval in the *past*. By setting `default_to_past` to `false`
+    /// the rule changes so they are assumed to refer to the nearest such interval in the future.
+    pub fn default_to_past(&self, default_to_past: bool) -> Config {
+        let mut c = self.clone();
+        c.default_to_past = default_to_past;
         c
     }
 }
@@ -921,7 +934,7 @@ fn specific(m: &Match) -> bool {
 }
 
 fn n_date(date: &Match, config: &Config) -> Result<NaiveDate, TimeError> {
-    let year = year(date, &config.now);
+    let year = year(date, config);
     let month = n_month(date);
     let day = n_day(date);
     match NaiveDate::from_ymd_opt(year, month, day) {
@@ -986,7 +999,7 @@ fn handle_specific_day(
             };
         }
         if let Some(date) = date.name("a_date") {
-            let year = year(date, &now);
+            let year = year(date, config);
             let month = a_month(date);
             let day = if date.has("n_day") {
                 n_day(date)
@@ -1072,7 +1085,7 @@ fn handle_specific_period(
         return Ok(span);
     }
     if let Some(moment) = moment.name("month_and_year") {
-        let y = year(moment, &config.now);
+        let y = year(moment, &config);
         let m = a_month(moment);
         return match NaiveDate::from_ymd_opt(y, m, 1) {
             None => unreachable!(),
@@ -1178,7 +1191,7 @@ fn handle_specific_period(
         };
     }
     if let Some(moment) = moment.name("year") {
-        let year = year(moment, &config.now);
+        let year = year(moment, config);
         return Ok(moment_to_period(
             NaiveDate::from_ymd(year, 1, 1).and_hms(0, 0, 0),
             &Period::Year,
@@ -1274,7 +1287,7 @@ fn handle_one_time(
     } else if let Some(moment) = moment.name("specific_time") {
         handle_specific_time(moment, config)
     } else {
-        relative_moment(moment, config, &config.now, true)
+        relative_moment(moment, config, &config.now, config.default_to_past)
     };
     match r {
         Ok((d1, d2)) => Ok((d1, d2, false)),
@@ -1307,7 +1320,7 @@ fn relative_moment(
     m: &Match,
     config: &Config,
     other_time: &NaiveDateTime,
-    before: bool,
+    before: bool, // whether the time found should be before or after the reference time
 ) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
     if let Some(a_month_and_a_day) = m.name("a_day_in_month") {
         return match month_and_a_day(a_month_and_a_day, config, other_time, before) {
@@ -1550,15 +1563,27 @@ fn n_month(m: &Match) -> u32 {
     cap[1].parse::<u32>().unwrap()
 }
 
-fn year(m: &Match, now: &NaiveDateTime) -> i32 {
+fn year(m: &Match, config: &Config) -> i32 {
     let year = m.name("year").unwrap();
     if let Some(sy) = year.name("short_year") {
         let y = s_to_n(sy.as_str()) as i32;
-        let this_year = now.year() % 100;
-        if this_year < y {
-            now.year() - this_year - 100 + y
+        let this_year = config.now.year() % 100;
+        if config.default_to_past {
+            if this_year < y {
+                // previous century
+                config.now.year() - this_year - 100 + y
+            } else {
+                // this century
+                config.now.year() - this_year + y
+            }
         } else {
-            now.year() - this_year + y
+            if this_year > y {
+                // next century
+                config.now.year() - this_year + 100 + y
+            } else {
+                // this century
+                config.now.year() - this_year + y
+            }
         }
     } else if let Some(suffix) = year.name("year_suffix") {
         let y = s_to_n(year.name("suffix_year").unwrap().as_str()) as i32;

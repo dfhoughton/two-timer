@@ -172,6 +172,18 @@ fn at_3_pm() {
 }
 
 #[test]
+fn at_3_pm_default_to_future() {
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(14, 0, 0);
+    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 0, 0);
+    for phrase in ["3 PM", "3 pm", "15"].iter() {
+        let (start, end, _) =
+            parse(phrase, Some(Config::new().now(now).default_to_past(false))).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::seconds(1), end);
+    }
+}
+
+#[test]
 fn at_3_00_pm() {
     let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(16, 0, 0);
     let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 0, 0);
@@ -349,6 +361,21 @@ fn may_1969() {
         assert_eq!(m1, start);
         assert_eq!(m2, end);
     }
+}
+
+#[test]
+fn short_year_past_vs_future() {
+    let m1 = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let m2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let now = NaiveDate::from_ymd(2020, 5, 6).and_hms(0, 0, 0); 
+    let (start, end, _) = parse("May '69", Some(Config::new().now(now))).unwrap();
+    assert_eq!(m1, start);
+    assert_eq!(m2, end);
+    let m1 = NaiveDate::from_ymd(2069, 5, 1).and_hms(0, 0, 0);
+    let m2 = NaiveDate::from_ymd(2069, 6, 1).and_hms(0, 0, 0);
+    let (start, end, _) = parse("May '69", Some(Config::new().now(now).default_to_past(false))).unwrap();
+    assert_eq!(m1, start);
+    assert_eq!(m2, end);
 }
 
 #[test]
@@ -781,6 +808,19 @@ fn monday() {
 }
 
 #[test]
+fn monday_default_to_future() {
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let then = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let (start, end, _) = parse(
+        "Monday",
+        Some(Config::new().now(now).default_to_past(false)),
+    )
+    .unwrap();
+    assert_eq!(then, start);
+    assert_eq!(then + Duration::days(1), end);
+}
+
+#[test]
 fn friday_at_3_pm() {
     let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
     let then = NaiveDate::from_ymd(1969, 5, 2).and_hms(15, 0, 0);
@@ -803,6 +843,19 @@ fn monday_at_3_pm() {
     let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
     let then = NaiveDate::from_ymd(1969, 5, 5).and_hms(15, 0, 0);
     let (start, end, _) = parse("Monday at 3 pm", Some(Config::new().now(now))).unwrap();
+    assert_eq!(then, start);
+    assert_eq!(then + Duration::seconds(1), end);
+}
+
+#[test]
+fn monday_at_3_pm_default_to_future() {
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let then = NaiveDate::from_ymd(1969, 5, 12).and_hms(15, 0, 0);
+    let (start, end, _) = parse(
+        "Monday at 3 pm",
+        Some(Config::new().now(now).default_to_past(false)),
+    )
+    .unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::seconds(1), end);
 }
@@ -838,11 +891,36 @@ fn just_june() {
 }
 
 #[test]
+fn just_june_default_to_future() {
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let d2 = NaiveDate::from_ymd(1969, 7, 1).and_hms(0, 0, 0);
+    let (start, end, _) =
+        parse("June", Some(Config::new().now(now).default_to_past(false))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
 fn monday_through_friday() {
     let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
     let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
     let d2 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
     let (start, end, _) = parse("Monday through Friday", Some(Config::new().now(now))).unwrap();
+    assert_eq!(d1, start);
+    assert_eq!(d2, end);
+}
+
+#[test]
+fn monday_through_friday_default_to_future() {
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let d2 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
+    let (start, end, _) = parse(
+        "Monday through Friday",
+        Some(Config::new().now(now).default_to_past(false)),
+    )
+    .unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
 }
@@ -1324,6 +1402,32 @@ fn day_and_month() {
 }
 
 #[test]
+fn day_and_month_default_to_future() {
+    let now = NaiveDate::from_ymd(1969, 6, 16).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1970, 5, 15).and_hms(0, 0, 0);
+    let d2 = d1 + Duration::days(1);
+    let patterns = [
+        "the ides of May",
+        "5-15",
+        "May fifteenth",
+        "May the 15th",
+        "May the fifteenth",
+    ];
+    for p in patterns.iter() {
+        match parse(p, Some(Config::new().now(now).default_to_past(false))) {
+            Ok((start, end, _)) => {
+                assert_eq!(d1, start);
+                assert_eq!(d2, end);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                assert!(false, "didn't match");
+            }
+        }
+    }
+}
+
+#[test]
 fn one_week_before_may_6_1969() {
     let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0) - Duration::days(7);
     let patterns = ["one week before May 6, 1969", "1 week before May 6, 1969"];
@@ -1441,7 +1545,36 @@ fn noon() {
     let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
     match parse("noon on May 6, 1969", Some(Config::new().now(now))) {
         Ok((start, end, _)) => {
-            assert_eq!(d1, start, "'noon' is the same as 'noon today'");
+            assert_eq!(d1, start);
+            assert_eq!(d2, end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
+}
+
+#[test]
+fn simple_noon_past_and_future() {
+    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(12, 0, 0);
+    let d2 = d1 + Duration::seconds(1);
+    match parse("noon", Some(Config::new().now(now))) {
+        Ok((start, end, _)) => {
+            assert_eq!(d1, start);
+            assert_eq!(d2, end);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            assert!(false, "didn't match");
+        }
+    }
+    let d1 = d1 + Duration::days(1);
+    let d2 = d2 + Duration::days(1);
+    match parse("noon", Some(Config::new().now(now).default_to_past(false))) {
+        Ok((start, end, _)) => {
+            assert_eq!(d1, start);
             assert_eq!(d2, end);
         }
         Err(e) => {
