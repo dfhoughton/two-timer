@@ -1,6 +1,6 @@
 # Change Log
 
-## 2.2.0
+## 2.2.0 *2020-10-3*
 * adding `default_to_past` configuration parameter to allow people to interpret relative times like "Tuesday" as the nearest such moment in the future rather than the past
 ## 2.1.0 *2020-5-17*
 * added since expressions: "since yesterday", "since the beginning of the month", "since the end of last year", "after midnight", ...
