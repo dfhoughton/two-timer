@@ -276,7 +276,7 @@ lazy_static! {
 
         year_suffix => <ce> | <bce>
 
-        relative_period -> <count> <displacement> <from_now_or_ago>
+        relative_period -> <count> <displacement> <ago> | <count> <displacement> <from_now> | <in_or_at> <count> <displacement> | <in_or_at> <count> <displacement> <from_now>
 
         count => r(r"[1-9][0-9]*") | <a_count>
 
@@ -352,7 +352,8 @@ lazy_static! {
         direction       -> [["before", "after", "around", "before and after"]]
         displacement    => [["week", "day", "hour", "minute", "second"]] ("s")?   // not handling variable-width periods like months or years
         end             => ("end")
-        from_now_or_ago => [["from now", "ago"]]
+        from_now        => [["from now"]]
+        ago             => [["ago"]]
         h12             => (?-B) [(1..=12).into_iter().collect::<Vec<_>>()]
         h24             => [(1..=24).into_iter().flat_map(|i| vec![format!("{}", i), format!("{:02}", i)]).collect::<Vec<_>>()]
         minute          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
@@ -367,6 +368,7 @@ lazy_static! {
         second          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
         suffix_year     => r(r"\b[1-9][0-9]{0,4}")
         through         => [["up through", "through", "thru"]] | r("-+")
+        in_or_at        => [["in", "at", "after"]]
 
         a_day => (?-i) [["M", "T", "W", "R", "F", "S", "U"]]
         a_day => [
@@ -1066,17 +1068,12 @@ fn handle_specific_period(
             's' | 'S' => (Duration::seconds(count), Period::Second),
             _ => unreachable!(),
         };
-        let d = match moment
-            .name("from_now_or_ago")
-            .unwrap()
-            .as_str()
-            .chars()
-            .nth(0)
-            .unwrap()
-        {
-            'a' | 'A' => config.now - displacement,
-            'f' | 'F' => config.now + displacement,
-            _ => unreachable!(),
+        let d = {
+            if moment.has("from_now") || moment.has("in_or_at") {
+                config.now + displacement
+            } else {
+                config.now - displacement
+            }
         };
         let span = match period {
             Period::Week => (d, d + Duration::weeks(1)),

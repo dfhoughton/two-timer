@@ -1,3 +1,7 @@
 /target
 **/*.rs.bk
 src/main.rs
+/.idea/.gitignore
+/.idea/modules.xml
+/.idea/two-timer.iml
+/.idea/vcs.xml
