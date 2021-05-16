@@ -248,7 +248,7 @@ lazy_static! {
 
         particular => <one_time> | <two_times>
 
-        one_time => <moment_or_period>
+        one_time => ("on")? <moment_or_period>
 
         two_times -> ("from")? <moment_or_period> <to> <moment_or_period> | <since_time>
 
@@ -277,9 +277,9 @@ lazy_static! {
 
         year_suffix => <ce> | <bce>
 
-        relative_period -> <count> <displacement> <ago> | <count> <displacement> <from_now> | <in_or_at> <count> <displacement> | <in_or_at> <count> <displacement> <from_now>
+        relative_period -> <count> <displacement> <ago> | <count> <displacement> <from_now> | <in_or_at> <count> <displacement> <from_now>?
 
-        count => r(r"[1-9][0-9]*") | <a_count>
+        count => r(r"[1-9][0-9]*") | <a_count> | <a_single>
 
         named_period => <a_day> | <a_month>
 
@@ -289,7 +289,7 @@ lazy_static! {
 
         amount -> <count> <unit>
 
-        point_in_time -> <at_time_on>? <some_day> <at_time>? | <specific_time> | <time>
+        point_in_time -> <at_time> | <at_time_on>? <some_day> <at_time>? | <specific_time> | <time>
 
         at_time_on -> ("at")? <time> ("on")?
 
@@ -343,8 +343,8 @@ lazy_static! {
         // terminal patterns
         // these are organized into single-line and multi-line patterns, with each group alphabetized
 
-        // various phrases all meaning from the first measurable moment to the last
         a_count         => [["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]]
+        a_single        => [["a", "an"]]
         adverb          => [["now", "today", "tomorrow", "yesterday"]]
         am_pm           => (?-ib) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
         bce             => (?-ib) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
@@ -363,13 +363,13 @@ lazy_static! {
         n_year          => r(r"\b(?:[1-9][0-9]{0,4}|0)\b")
         roman           => [["nones", "ides", "kalends"]]
         since           => [["since", "after"]]
-        unit            => [["week", "day", "hour", "minute", "second"]] ("s")?
+        unit            => [["week", "day", "hour", "minute", "second"]] ("s")? // the same as displacement- one is for adjustments
         universal       => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
         up_to           => [["to", "until", "up to", "till"]]
         second          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
         suffix_year     => r(r"\b[1-9][0-9]{0,4}")
         through         => [["up through", "through", "thru"]] | r("-+")
-        in_or_at        => [["in", "at", "after"]]
+        in_or_at        => [["in", "after"]]
 
         a_day => (?-i) [["M", "T", "W", "R", "F", "S", "U"]]
         a_day => [
@@ -509,12 +509,12 @@ lazy_static! {
             ]
     };
 }
-// code generated via cargo run --bin serializer
-// this saves the cost of generating GRAMMAR
+
 lazy_static! {
     #[doc(hidden)]
     pub static ref MATCHER: Matcher = GRAMMAR.matcher().unwrap();
 }
+
 lazy_static! {
     // making this public is useful for testing, but best to keep it hidden to
     // limit complexity and commitment
@@ -585,8 +585,7 @@ lazy_static! {
             ]
     };
 }
-// code generated via cargo run --bin serializer
-// this saves the cost of generating GRAMMAR
+
 lazy_static! {
     #[doc(hidden)]
     pub static ref SMALL_MATCHER : Matcher = SMALL_GRAMMAR.matcher().unwrap();
@@ -799,6 +798,7 @@ pub struct Config<T: TimeZone> {
     pay_period_length: u32,
     pay_period_start: Option<Date<T>>,
     default_to_past: bool,
+    select_instant: bool,
 }
 
 impl<T: TimeZone> Config<T> {
@@ -811,10 +811,11 @@ impl<T: TimeZone> Config<T> {
             pay_period_length: 7,
             pay_period_start: None,
             default_to_past: true,
+            select_instant: false,
         }
     }
-    /// Returns a copy of the configuration parameters with the "now" moment
-    /// set to the parameter supplied.
+    /// Set now to be a different time, to work relative to some other point in time.
+    /// Can also modify the timezone, since the `DateTime` accepted is aware
     pub fn now(mut self, d: DateTime<T>) -> Self {
         self.now = d;
 
@@ -823,6 +824,15 @@ impl<T: TimeZone> Config<T> {
 
     fn period(mut self, period: Period) -> Self {
         self.period = period;
+
+        self
+    }
+    /// Set whether to select the instant or not. For example,
+    /// with this set `false` (default), the statement "in a day" will capture
+    /// from midnight to midnight around that day, whereas with this set as
+    /// `true`, "in a day" will capture this time in 24 hours.
+    pub fn select_instant(mut self, select_instant: bool) -> Self {
+        self.select_instant = select_instant;
 
         self
     }
@@ -1767,72 +1777,76 @@ fn moment_to_period<T: TimeZone>(
     period: &Period,
     config: &Config<T>,
 ) -> (DateTime<T>, DateTime<T>) {
-    match period {
-        Period::Year => {
-            let d1 = config.ymd(now.year(), 1, 1).and_hms(0, 0, 0);
-            let d2 = config.ymd(now.year() + 1, 1, 1).and_hms(0, 0, 0);
-            (d1, d2)
-        }
-        Period::Month => {
-            let d1 = config.ymd(now.year(), now.month(), 1).and_hms(0, 0, 0);
-            let d2 = if now.month() == 12 {
-                config.ymd(now.year() + 1, 1, 1)
-            } else {
-                config.ymd(now.year(), now.month() + 1, 1)
+    if !config.select_instant {
+        match period {
+            Period::Year => {
+                let d1 = config.ymd(now.year(), 1, 1).and_hms(0, 0, 0);
+                let d2 = config.ymd(now.year() + 1, 1, 1).and_hms(0, 0, 0);
+                (d1, d2)
             }
-            .and_hms(0, 0, 0);
-            (d1, d2)
-        }
-        Period::Week => {
-            let offset = if config.monday_starts_week {
-                now.weekday().num_days_from_monday()
-            } else {
-                now.weekday().num_days_from_sunday()
-            };
-            let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0)
-                - Duration::days(offset as i64);
-            (d1.clone(), d1 + Duration::days(7))
-        }
-        Period::Day => {
-            let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0);
-            (d1.clone(), d1 + Duration::days(1))
-        }
-        Period::Hour => {
-            let d1 =
-                config.ymd(now.year(), now.month(), now.day()).and_hms(now.hour(), 0, 0);
-            (d1.clone(), d1 + Duration::hours(1))
-        }
-        Period::Minute => {
-            let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(
-                now.hour(),
-                now.minute(),
-                0,
-            );
-            (d1.clone(), d1 + Duration::minutes(1))
-        }
-        Period::Second => {
-            let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(
-                now.hour(),
-                now.minute(),
-                now.second(),
-            );
-            (d1.clone(), d1 + Duration::seconds(1))
-        }
-        Period::PayPeriod => {
-            if let Some(pps) = &config.pay_period_start {
-                // find the current pay period start
-                let offset = now.num_days_from_ce() - pps.num_days_from_ce();
-                let ppl = config.pay_period_length as i32;
-                let mut offset = (offset % ppl) as i64;
-                if offset < 0 {
-                    offset += config.pay_period_length as i64;
+            Period::Month => {
+                let d1 = config.ymd(now.year(), now.month(), 1).and_hms(0, 0, 0);
+                let d2 = if now.month() == 12 {
+                    config.ymd(now.year() + 1, 1, 1)
+                } else {
+                    config.ymd(now.year(), now.month() + 1, 1)
                 }
-                let d1 = (now.date() - Duration::days(offset)).and_hms(0, 0, 0);
-                (d1.clone(), d1 + Duration::days(config.pay_period_length as i64))
-            } else {
-                unreachable!()
+                .and_hms(0, 0, 0);
+                (d1, d2)
+            }
+            Period::Week => {
+                let offset = if config.monday_starts_week {
+                    now.weekday().num_days_from_monday()
+                } else {
+                    now.weekday().num_days_from_sunday()
+                };
+                let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0)
+                    - Duration::days(offset as i64);
+                (d1.clone(), d1 + Duration::days(7))
+            }
+            Period::Day => {
+                let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0);
+                (d1.clone(), d1 + Duration::days(1))
+            }
+            Period::Hour => {
+                let d1 =
+                    config.ymd(now.year(), now.month(), now.day()).and_hms(now.hour(), 0, 0);
+                (d1.clone(), d1 + Duration::hours(1))
+            }
+            Period::Minute => {
+                let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(
+                    now.hour(),
+                    now.minute(),
+                    0,
+                );
+                (d1.clone(), d1 + Duration::minutes(1))
+            }
+            Period::Second => {
+                let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(
+                    now.hour(),
+                    now.minute(),
+                    now.second(),
+                );
+                (d1.clone(), d1 + Duration::seconds(1))
+            }
+            Period::PayPeriod => {
+                if let Some(pps) = &config.pay_period_start {
+                    // find the current pay period start
+                    let offset = now.num_days_from_ce() - pps.num_days_from_ce();
+                    let ppl = config.pay_period_length as i32;
+                    let mut offset = (offset % ppl) as i64;
+                    if offset < 0 {
+                        offset += config.pay_period_length as i64;
+                    }
+                    let d1 = (now.date() - Duration::days(offset)).and_hms(0, 0, 0);
+                    (d1.clone(), d1 + Duration::days(config.pay_period_length as i64))
+                } else {
+                    unreachable!()
+                }
             }
         }
+    } else {
+        (now.clone(), now + Duration::seconds(1))
     }
 }
 
@@ -1931,7 +1945,9 @@ fn adjust<T: TimeZone>(d1: DateTime<T>, d2: DateTime<T>, m: &Match) -> (DateTime
 // for converting a few cardinal numbers and integer expressions
 fn count(m: &Match) -> u32 {
     let s = m.as_str();
-    if m.has("a_count") {
+    if m.has("a_single") {
+        1
+    } else if m.has("a_count") {
         // cardinal numbers
         match s.chars().nth(0).expect("impossibly short") {
             'o' | 'O' => 1,

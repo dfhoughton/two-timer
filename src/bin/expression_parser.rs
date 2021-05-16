@@ -2,7 +2,6 @@ extern crate two_timer;
 
 use two_timer::{parse, Config};
 use std::env;
-use chrono_tz::US::Pacific;
 use chrono::Local;
 
 fn main() {
@@ -11,7 +10,9 @@ fn main() {
 
     let parse_str = args.collect::<Vec<String>>().join(" ");
 
-    let config = Config::new(Local::now().with_timezone(&Pacific)).default_to_past(false);
+    let config = Config::new(Local::now())
+        .default_to_past(false)
+        .select_instant(true);
 
     let res = parse(&parse_str, config).unwrap();
 
