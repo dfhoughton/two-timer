@@ -1,6 +1,8 @@
 # Change Log
 
-## 2.2.1 *2020-3-29*
+## 2.2.2 *2021-7-3*
+* slight modernization
+## 2.2.1 *2021-3-29*
 * changing the license from GPL 2 to MIT
 ## 2.2.0 *2020-10-3*
 * adding `default_to_past` configuration parameter to allow people to interpret relative times like "Tuesday" as the nearest such moment in the future rather than the past

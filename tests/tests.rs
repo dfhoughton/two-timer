@@ -1,4 +1,3 @@
-#![feature(test)]
 extern crate two_timer;
 use two_timer::{parsable, parse, Config, TimeError};
 extern crate chrono;
@@ -1830,7 +1829,7 @@ fn since_the_end_of_may_misordered() {
             Ok((..)) => assert!(false, "this should not succeed"),
             Err(e) => match e {
                 TimeError::Misordered(_) => assert!(true, "correct error"),
-                _ => assert!(false, format!("unexpected error: {:?}", e)),
+                _ => assert!(false, "unexpected error: {:?}", e),
             },
         }
     }
