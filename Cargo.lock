@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "two_timer"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "chrono",
  "lazy_static",

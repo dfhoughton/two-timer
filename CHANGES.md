@@ -1,5 +1,7 @@
 # Change Log
 
+## 2.2.3 *2021-8-15*
+* accepted PR from Geobert implementing std::error::Error and std::fmt::Display for TimeError
 ## 2.2.2 *2021-7-3*
 * slight modernization
 ## 2.2.1 *2021-3-29*
