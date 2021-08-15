@@ -893,6 +893,20 @@ impl TimeError {
     }
 }
 
+impl std::error::Error for TimeError {}
+
+impl std::fmt::Display for TimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TimeError::Parse(s) => write!(f, "Parse error: {}", s),
+            TimeError::Misordered(s) => write!(f, "Misordered error: {}", s),
+            TimeError::ImpossibleDate(s) => write!(f, "Impossible date: {}", s),
+            TimeError::Weekday(s) => write!(f, "Weekday error: {}", s),
+            TimeError::NoPayPeriod(s) => write!(f, "No Pay Period error: {}", s),
+        }
+    }
+}
+
 // for the end time, if the span is less than a day, use the first, otherwise use the second
 // e.g., Monday through Friday at 3 PM should end at 3 PM, but Monday through Friday should end at the end of Friday
 fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDateTime {
