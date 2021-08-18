@@ -16,7 +16,7 @@ separated by a preposition such as "to", "through", "up to", or "until".
 extern crate two_timer;
 use two_timer::{parse, Config};
 extern crate chrono;
-use chrono::naive::NaiveDate;
+use chrono::Local;
 
 pub fn main() {
     let phrases = [
@@ -39,16 +39,16 @@ pub fn main() {
         .unwrap()
         .len();
     for phrase in phrases.iter() {
-        match parse(phrase, None) {
+        match parse(phrase, Config::new(Local::now())) {
             Ok((d1, d2, _)) => println!("{:width$} => {} --- {}", phrase, d1, d2, width = max),
             Err(e) => println!("{:?}", e),
         }
     }
-    let now = NaiveDate::from_ymd_opt(1066, 10, 14).unwrap().and_hms(12, 30, 15);
+    let now = Local::from_ymd_opt(1066, 10, 14).unwrap().and_hms(12, 30, 15);
     println!("\nlet \"now\" be some moment during the Battle of Hastings, specifically {}\n", now);
-    let conf = Config::new().now(now);
+    let conf = Config::new(now);
     for phrase in phrases.iter() {
-        match parse(phrase, Some(conf.clone())) {
+        match parse(phrase, conf.clone()) {
             Ok((d1, d2, _)) => println!("{:width$} => {} --- {}", phrase, d1, d2, width = max),
             Err(e) => println!("{:?}", e),
         }
@@ -179,7 +179,9 @@ The potential unit separators are `/`, `.`, and `-`. Whitespace is optional.
 
 # Timezones
 
-At the moment `two_timer` only produces "naive" times. Sorry about that.
+`two_timer` supports timezones via passing a timezone-aware date into `Config::now()` or by setting
+the timezone on `Config` with `Config::with_timezone`. By default, `two_timer` will use the local
+timezone.
 
 # Optional Features
 
@@ -226,8 +228,7 @@ extern crate pidgin;
 extern crate lazy_static;
 extern crate chrono;
 extern crate serde_json;
-use chrono::naive::{NaiveDate, NaiveDateTime};
-use chrono::{Datelike, Duration, Local, Timelike, Weekday};
+use chrono::{Datelike, Duration, Timelike, Weekday, DateTime, TimeZone, Date};
 use pidgin::{Grammar, Match, Matcher};
 use regex::Regex;
 
@@ -247,7 +248,7 @@ lazy_static! {
 
         particular => <one_time> | <two_times>
 
-        one_time => <moment_or_period>
+        one_time => ("on")? <moment_or_period>
 
         two_times -> ("from")? <moment_or_period> <to> <moment_or_period> | <since_time>
 
@@ -276,9 +277,9 @@ lazy_static! {
 
         year_suffix => <ce> | <bce>
 
-        relative_period -> <count> <displacement> <from_now_or_ago>
+        relative_period -> <count> <displacement> <ago> | <count> <displacement> <from_now> | <in_or_at> <count> <displacement> <from_now>?
 
-        count => r(r"[1-9][0-9]*") | <a_count>
+        count => r(r"[1-9][0-9]*") | <a_count> | <a_single>
 
         named_period => <a_day> | <a_month>
 
@@ -288,7 +289,7 @@ lazy_static! {
 
         amount -> <count> <unit>
 
-        point_in_time -> <at_time_on>? <some_day> <at_time>? | <specific_time> | <time>
+        point_in_time -> <at_time> | <at_time_on>? <some_day> <at_time>? | <specific_time> | <time>
 
         at_time_on -> ("at")? <time> ("on")?
 
@@ -342,8 +343,8 @@ lazy_static! {
         // terminal patterns
         // these are organized into single-line and multi-line patterns, with each group alphabetized
 
-        // various phrases all meaning from the first measurable moment to the last
         a_count         => [["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]]
+        a_single        => [["a", "an"]]
         adverb          => [["now", "today", "tomorrow", "yesterday"]]
         am_pm           => (?-ib) [["am", "AM", "pm", "PM", "a.m.", "A.M.", "p.m.", "P.M."]]
         bce             => (?-ib) [["bce", "b.c.e.", "bc", "b.c.", "BCE", "B.C.E.", "BC", "B.C."]]
@@ -352,7 +353,8 @@ lazy_static! {
         direction       -> [["before", "after", "around", "before and after"]]
         displacement    => [["week", "day", "hour", "minute", "second"]] ("s")?   // not handling variable-width periods like months or years
         end             => ("end")
-        from_now_or_ago => [["from now", "ago"]]
+        from_now        => [["from now"]]
+        ago             => [["ago"]]
         h12             => (?-B) [(1..=12).into_iter().collect::<Vec<_>>()]
         h24             => [(1..=24).into_iter().flat_map(|i| vec![format!("{}", i), format!("{:02}", i)]).collect::<Vec<_>>()]
         minute          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
@@ -361,12 +363,13 @@ lazy_static! {
         n_year          => r(r"\b(?:[1-9][0-9]{0,4}|0)\b")
         roman           => [["nones", "ides", "kalends"]]
         since           => [["since", "after"]]
-        unit            => [["week", "day", "hour", "minute", "second"]] ("s")?
+        unit            => [["week", "day", "hour", "minute", "second"]] ("s")? // the same as displacement- one is for adjustments
         universal       => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
         up_to           => [["to", "until", "up to", "till"]]
         second          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
         suffix_year     => r(r"\b[1-9][0-9]{0,4}")
         through         => [["up through", "through", "thru"]] | r("-+")
+        in_or_at        => [["in", "after"]]
 
         a_day => (?-i) [["M", "T", "W", "R", "F", "S", "U"]]
         a_day => [
@@ -506,12 +509,12 @@ lazy_static! {
             ]
     };
 }
-// code generated via cargo run --bin serializer
-// this saves the cost of generating GRAMMAR
+
 lazy_static! {
     #[doc(hidden)]
     pub static ref MATCHER: Matcher = GRAMMAR.matcher().unwrap();
 }
+
 lazy_static! {
     // making this public is useful for testing, but best to keep it hidden to
     // limit complexity and commitment
@@ -582,8 +585,7 @@ lazy_static! {
             ]
     };
 }
-// code generated via cargo run --bin serializer
-// this saves the cost of generating GRAMMAR
+
 lazy_static! {
     #[doc(hidden)]
     pub static ref SMALL_MATCHER : Matcher = SMALL_GRAMMAR.matcher().unwrap();
@@ -620,10 +622,10 @@ pub fn parsable(phrase: &str) -> bool {
 /// # use two_timer::{parse, Config};
 /// let (reference_time, _, _) = parse("5/6/69", None).unwrap();
 /// ```
-pub fn parse(
+pub fn parse<T: TimeZone>(
     phrase: &str,
-    config: Option<Config>,
-) -> Result<(NaiveDateTime, NaiveDateTime, bool), TimeError> {
+    config: Config<T>,
+) -> Result<(DateTime<T>, DateTime<T>, bool), TimeError> {
     let parse = if cfg!(feature = "small_grammar") {
         SMALL_MATCHER
             .parse(phrase)
@@ -637,17 +639,17 @@ pub fn parse(
             phrase
         )));
     }
+
     let parse = parse.unwrap();
     if parse.has("universal") {
-        return Ok((first_moment(), last_moment(), false));
+        return Ok((config.first_moment(), config.last_moment(), false));
     }
     let parse = parse.name("particular").unwrap();
-    let config = config.unwrap_or(Config::new());
     if let Some(moment) = parse.name("one_time") {
         return match handle_one_time(moment, &config) {
             Err(e) => Err(e),
             Ok((d1, d2, b)) => {
-                let (d3, d4) = adjust(d1, d2, moment);
+                let (d3, d4) = adjust(d1.clone(), d2.clone(), moment);
                 if d1 == d3 {
                     Ok((d1, d2, b))
                 } else {
@@ -667,7 +669,7 @@ pub fn parse(
             if specific(previous_time) {
                 return match specific_moment(previous_time, &config) {
                     Ok((d1, d2)) => {
-                        let t = if inclusive { d1 } else { d2 };
+                        let t = if inclusive { d1.clone() } else { d2 };
                         // if *implicitly* exclusive and we find things misordered, we become inclusive
                         let t = if !(inclusive || exclusive) && t > config.now {
                             d1
@@ -677,7 +679,7 @@ pub fn parse(
                         if t > config.now {
                             Err(TimeError::Misordered(format!(
                                 "the inferred times, {} and {}, are misordered",
-                                t, config.now
+                                t.naive_local(), config.now.naive_local()
                             )))
                         } else {
                             Ok((t, config.now.clone(), false))
@@ -688,7 +690,7 @@ pub fn parse(
             }
             return match relative_moment(previous_time, &config, &config.now, true) {
                 Ok((d1, d2)) => {
-                    let t = if inclusive { d1 } else { d2 };
+                    let t = if inclusive { d1.clone() } else { d2 };
                     let t = if !(inclusive || exclusive) && t > config.now {
                         d1
                     } else {
@@ -697,7 +699,7 @@ pub fn parse(
                     if t > config.now {
                         Err(TimeError::Misordered(format!(
                             "the inferred times, {} and {}, are misordered",
-                            t, config.now
+                            t.naive_local(), config.now.naive_local()
                         )))
                     } else {
                         Ok((t, config.now.clone(), false))
@@ -789,74 +791,128 @@ pub fn parse(
 /// A collection of parameters that can influence the interpretation
 /// of time expressions.
 #[derive(Debug, Clone)]
-pub struct Config {
-    now: NaiveDateTime,
+pub struct Config<T: TimeZone> {
+    now: DateTime<T>,
     monday_starts_week: bool,
     period: Period,
     pay_period_length: u32,
-    pay_period_start: Option<NaiveDate>,
+    pay_period_start: Option<Date<T>>,
     default_to_past: bool,
+    select_instant: bool,
 }
 
-impl Config {
+impl<T: TimeZone> Config<T> {
     /// Constructs an expression with the default parameters.
-    pub fn new() -> Config {
+    pub fn new(d: DateTime<T>) -> Config<T> {
         Config {
-            now: Local::now().naive_local(),
+            now: d,
             monday_starts_week: true,
             period: Period::Minute,
             pay_period_length: 7,
             pay_period_start: None,
             default_to_past: true,
+            select_instant: false,
         }
     }
-    /// Returns a copy of the configuration parameters with the "now" moment
-    /// set to the parameter supplied.
-    pub fn now(&self, n: NaiveDateTime) -> Config {
-        let mut c = self.clone();
-        c.now = n;
-        c
+    /// Set now to be a different time, to work relative to some other point in time.
+    /// Can also modify the timezone, since the `DateTime` accepted is aware
+    pub fn now(mut self, d: DateTime<T>) -> Self {
+        self.now = d;
+
+        self
     }
-    fn period(&self, period: Period) -> Config {
-        let mut c = self.clone();
-        c.period = period;
-        c
+
+    fn period(mut self, period: Period) -> Self {
+        self.period = period;
+
+        self
+    }
+    /// Set whether to select the instant or not. For example,
+    /// with this set `false` (default), the statement "in a day" will capture
+    /// from midnight to midnight around that day, whereas with this set as
+    /// `true`, "in a day" will capture this time in 24 hours.
+    pub fn select_instant(mut self, select_instant: bool) -> Self {
+        self.select_instant = select_instant;
+
+        self
     }
     /// Returns a copy of the configuration parameters with whether
     /// Monday is regarded as the first day of the week set to the parameter
     /// supplied. By default Monday *is* regarded as the first day. If this
     /// parameter is set to `false`, Sunday will be regarded as the first weekday.
-    pub fn monday_starts_week(&self, monday_starts_week: bool) -> Config {
-        let mut c = self.clone();
-        c.monday_starts_week = monday_starts_week;
-        c
+    pub fn monday_starts_week(mut self, monday_starts_week: bool) -> Self {
+        self.monday_starts_week = monday_starts_week;
+
+        self
     }
     /// Returns a copy of the configuration parameters with the pay period
     /// length in days set to the parameter supplied. The default pay period
     /// length is 7 days.
-    pub fn pay_period_length(&self, pay_period_length: u32) -> Config {
-        let mut c = self.clone();
-        c.pay_period_length = pay_period_length;
-        c
+    pub fn pay_period_length(mut self, pay_period_length: u32) -> Self {
+        self.pay_period_length = pay_period_length;
+
+        self
     }
     /// Returns a copy of the configuration parameters with the reference start
     /// date for a pay period set to the parameter supplied. By default this date
     /// is undefined. Unless it is defined, expressions containing the phrase "pay period"
     /// or "pp" cannot be interpreted.
-    pub fn pay_period_start(&self, pay_period_start: Option<NaiveDate>) -> Config {
-        let mut c = self.clone();
-        c.pay_period_start = pay_period_start;
-        c
+    pub fn pay_period_start(mut self, pay_period_start: Option<Date<T>>) -> Self {
+        self.pay_period_start = pay_period_start;
+
+        self
     }
-    /// Returns a copy of the configuration parameters with the `default_to_past`
-    /// parameter set as specified. This allows the interpretation of relative time expressions
-    /// like "Friday" and "12:00". By default, these expressions are assumed to refer to the
-    /// most recent such interval in the *past*. By setting `default_to_past` to `false`
-    /// the rule changes so they are assumed to refer to the nearest such interval in the future.
-    pub fn default_to_past(&self, default_to_past: bool) -> Config {
-        let mut c = self.clone();
-        c.default_to_past = default_to_past;
-        c
+    /// Set the `default_to_past` parameter as specified. This allows the interpretation of
+    /// relative time expressions like "Friday" and "12:00". By default, these expressions are
+    /// assumed to refer to the most recent such interval in the *past*. By setting
+    /// `default_to_past` to `false` the rule changes so they are assumed to refer to the nearest
+    /// such interval in the future.
+    pub fn default_to_past(mut self, default_to_past: bool) -> Self {
+        self.default_to_past = default_to_past;
+
+        self
+    }
+    /// Set the timezone to be used. This literally calls the `with_timezone` method on the
+    /// underlying DateTime<T> object.
+    pub fn with_timezone(mut self, timezone: T) -> Self {
+        self.now = self.now.with_timezone(&timezone);
+
+        self
+    }
+
+    /// The moment regarded as the beginning of time.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # extern crate two_timer;
+    /// # use two_timer::Config;
+    /// println!("{}", Config::new().first_moment()); // -262144-01-01 00:00:00
+    /// ```
+    pub fn first_moment(&self) -> DateTime<T> {
+        chrono::MIN_DATE.with_timezone(&self.now.timezone()).and_hms_milli(0, 0, 0, 0)
+    }
+
+    /// The moment regarded as the end of time.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # extern crate two_timer;
+    /// # use two_timer::last_moment;
+    /// # use chrono::Local;
+    /// println!("{}", Config::new().last_moment()); // -262144-01-01 00:00:00
+    /// ```
+    pub fn last_moment(&self) -> DateTime<T> {
+        chrono::MAX_DATE.with_timezone(&self.now.timezone()).and_hms_milli(23, 59, 59, 999)
+    }
+
+    pub(crate) fn ymd_opt(&self, year: i32, month: u32, day: u32) -> Option<Date<T>> {
+        self.now.timezone().ymd_opt(year, month, day).earliest()
+    }
+
+    pub(crate) fn ymd(&self, year: i32, month: u32, day: u32) -> Date<T> {
+        self.now.timezone().ymd(year, month, day)
     }
 }
 
@@ -909,7 +965,7 @@ impl std::fmt::Display for TimeError {
 
 // for the end time, if the span is less than a day, use the first, otherwise use the second
 // e.g., Monday through Friday at 3 PM should end at 3 PM, but Monday through Friday should end at the end of Friday
-fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDateTime {
+fn pick_terminus<T: TimeZone>(d1: DateTime<T>, d2: DateTime<T>, through: bool) -> DateTime<T> {
     if through {
         d2
     } else {
@@ -917,41 +973,15 @@ fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDa
     }
 }
 
-/// The moment regarded as the beginning of time.
-///
-/// # Examples
-///
-/// ```rust
-/// # extern crate two_timer;
-/// # use two_timer::first_moment;
-/// println!("{}", first_moment()); // -262144-01-01 00:00:00
-/// ```
-pub fn first_moment() -> NaiveDateTime {
-    chrono::naive::MIN_DATE.and_hms_milli(0, 0, 0, 0)
-}
-
-/// The moment regarded as the end of time.
-///
-/// # Examples
-///
-/// ```rust
-/// # extern crate two_timer;
-/// # use two_timer::last_moment;
-/// println!("{}", last_moment()); // +262143-12-31 23:59:59.999
-/// ```
-pub fn last_moment() -> NaiveDateTime {
-    chrono::naive::MAX_DATE.and_hms_milli(23, 59, 59, 999)
-}
-
 fn specific(m: &Match) -> bool {
     m.has("specific_day") || m.has("specific_period") || m.has("specific_time")
 }
 
-fn n_date(date: &Match, config: &Config) -> Result<NaiveDate, TimeError> {
+fn n_date<T: TimeZone>(date: &Match, config: &Config<T>) -> Result<Date<T>, TimeError> {
     let year = year(date, config);
     let month = n_month(date);
     let day = n_day(date);
-    match NaiveDate::from_ymd_opt(year, month, day) {
+    match config.ymd_opt(year, month, day) {
         None => Err(TimeError::ImpossibleDate(format!(
             "cannot construct date with year {}, month {}, and day {}",
             year, month, day
@@ -960,10 +990,10 @@ fn n_date(date: &Match, config: &Config) -> Result<NaiveDate, TimeError> {
     }
 }
 
-fn handle_specific_day(
+fn handle_specific_day<T: TimeZone>(
     m: &Match,
-    config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+    config: &Config<T>,
+) -> Result<(DateTime<T>, DateTime<T>), TimeError> {
     let now = config.now.clone();
     let mut times = m.all_names("time");
     if times.len() > 1 {
@@ -979,23 +1009,27 @@ fn handle_specific_day(
             'n' | 'N' => Ok(moment_and_time(config, time)),
             't' | 'T' => match adverb.as_str().chars().nth(2).expect("impossible string") {
                 // today
-                'd' | 'D' => Ok(moment_and_time(&config.period(Period::Day), time)),
+                'd' | 'D' => Ok(moment_and_time(&config.clone().period(Period::Day), time)),
                 // tomorrow
-                'm' | 'M' => Ok(moment_and_time(
-                    &Config::new()
-                        .now(now + Duration::days(1))
-                        .period(Period::Day),
-                    time,
-                )),
+                'm' | 'M' => {
+                    let new_config = config.clone().now(now + Duration::days(1)).period(Period::Day);
+
+                    Ok(moment_and_time(
+                        &new_config,
+                        time,
+                    ))
+                },
                 _ => unreachable!(),
             },
             // yesterday
-            'y' | 'Y' => Ok(moment_and_time(
-                &Config::new()
-                    .now(now - Duration::days(1))
-                    .period(Period::Day),
-                time,
-            )),
+            'y' | 'Y' => {
+                let new_config = config.clone().now(now - Duration::days(1)).period(Period::Day);
+
+                Ok(moment_and_time(
+                    &new_config,
+                    time,
+                ))
+            },
             _ => unreachable!(),
         };
     }
@@ -1005,8 +1039,10 @@ fn handle_specific_day(
                 Err(s) => Err(s),
                 Ok(d1) => {
                     let d1 = d1.and_hms(0, 0, 0);
+                    let new_config = config.clone().now(d1).period(Period::Day);
+
                     Ok(moment_and_time(
-                        &Config::new().now(d1).period(Period::Day),
+                        &new_config,
                         time,
                     ))
                 }
@@ -1020,7 +1056,7 @@ fn handle_specific_day(
             } else {
                 o_day(date, month)
             };
-            let d_opt = NaiveDate::from_ymd_opt(year, month, day);
+            let d_opt = config.ymd_opt(year, month, day);
             return match d_opt {
                 None => Err(TimeError::ImpossibleDate(format!(
                     "cannot construct date with year {}, month {}, and day {}",
@@ -1031,8 +1067,10 @@ fn handle_specific_day(
                         let wd = weekday(wd.as_str());
                         if wd == d1.weekday() {
                             let d1 = d1.and_hms(0, 0, 0);
+                            let new_config = config.clone().now(d1).period(Period::Day);
+
                             Ok(moment_and_time(
-                                &Config::new().now(d1).period(Period::Day),
+                                &new_config,
                                 time,
                             ))
                         } else {
@@ -1046,8 +1084,10 @@ fn handle_specific_day(
                         }
                     } else {
                         let d1 = d1.and_hms(0, 0, 0);
+                        let new_config = config.clone().now(d1).period(Period::Day);
+
                         Ok(moment_and_time(
-                            &Config::new().now(d1).period(Period::Day),
+                            &new_config,
                             time,
                         ))
                     }
@@ -1059,10 +1099,10 @@ fn handle_specific_day(
     unimplemented!();
 }
 
-fn handle_specific_period(
+fn handle_specific_period<T: TimeZone>(
     moment: &Match,
-    config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+    config: &Config<T>,
+) -> Result<(DateTime<T>, DateTime<T>), TimeError> {
     if let Some(moment) = moment.name("relative_period") {
         let count = count(moment.name("count").unwrap()) as i64;
         let (displacement, period) = match moment
@@ -1080,20 +1120,15 @@ fn handle_specific_period(
             's' | 'S' => (Duration::seconds(count), Period::Second),
             _ => unreachable!(),
         };
-        let d = match moment
-            .name("from_now_or_ago")
-            .unwrap()
-            .as_str()
-            .chars()
-            .nth(0)
-            .unwrap()
-        {
-            'a' | 'A' => config.now - displacement,
-            'f' | 'F' => config.now + displacement,
-            _ => unreachable!(),
+        let d = {
+            if moment.has("from_now") || moment.has("in_or_at") {
+                config.now.clone() + displacement
+            } else {
+                config.now.clone() - displacement
+            }
         };
         let span = match period {
-            Period::Week => (d, d + Duration::weeks(1)),
+            Period::Week => (d.clone(), d + Duration::weeks(1)),
             _ => moment_to_period(d, &period, config),
         };
         return Ok(span);
@@ -1101,16 +1136,15 @@ fn handle_specific_period(
     if let Some(moment) = moment.name("month_and_year") {
         let y = year(moment, &config);
         let m = a_month(moment);
-        return match NaiveDate::from_ymd_opt(y, m, 1) {
-            None => unreachable!(),
-            Some(d1) => {
+        return config.ymd_opt(y, m, 1).map(|d1| {
                 let d1 = d1.and_hms(0, 0, 0);
+                let new_config = config.clone().now(d1).period(Period::Month);
+
                 Ok(moment_and_time(
-                    &Config::new().now(d1).period(Period::Month),
+                    &new_config,
                     None,
                 ))
-            }
-        };
+        }).unwrap()
     }
     if let Some(moment) = moment.name("modified_period") {
         let modifier = PeriodModifier::from_match(moment.name("modifier"));
@@ -1138,7 +1172,7 @@ fn handle_specific_period(
         }
         return match ModifiablePeriod::from_match(moment.name("modifiable_period").unwrap()) {
             ModifiablePeriod::Week => {
-                let (d, _) = moment_to_period(config.now, &Period::Week, config);
+                let (d, _) = moment_to_period(config.now.clone(), &Period::Week, config);
                 let d = match modifier {
                     PeriodModifier::Next => d + Duration::days(7),
                     PeriodModifier::Last => d - Duration::days(7),
@@ -1148,17 +1182,17 @@ fn handle_specific_period(
             }
             ModifiablePeriod::Weekend => {
                 let (_, d2) =
-                    moment_to_period(config.now, &Period::Week, &config.monday_starts_week(true));
+                    moment_to_period(config.now.clone(), &Period::Week, &config.clone().monday_starts_week(true));
                 let d2 = match modifier {
                     PeriodModifier::Next => d2 + Duration::days(7),
                     PeriodModifier::Last => d2 - Duration::days(7),
                     PeriodModifier::This => d2,
                 };
-                let d1 = d2 - Duration::days(2);
+                let d1 = d2.clone() - Duration::days(2);
                 Ok((d1, d2))
             }
             ModifiablePeriod::Month => {
-                let (d, _) = moment_to_period(config.now, &Period::Month, config);
+                let (d, _) = moment_to_period(config.now.clone(), &Period::Month, config);
                 let d = match modifier {
                     PeriodModifier::Next => {
                         if d.month() == 12 {
@@ -1179,7 +1213,7 @@ fn handle_specific_period(
                 Ok(moment_to_period(d, &Period::Month, config))
             }
             ModifiablePeriod::Year => {
-                let (d, _) = moment_to_period(config.now, &Period::Year, config);
+                let (d, _) = moment_to_period(config.now.clone(), &Period::Year, config);
                 let d = match modifier {
                     PeriodModifier::Next => d.with_year(d.year() + 1).unwrap(),
                     PeriodModifier::Last => d.with_year(d.year() - 1).unwrap(),
@@ -1189,7 +1223,7 @@ fn handle_specific_period(
             }
             ModifiablePeriod::PayPeriod => {
                 if config.pay_period_start.is_some() {
-                    let (d, _) = moment_to_period(config.now, &Period::PayPeriod, config);
+                    let (d, _) = moment_to_period(config.now.clone(), &Period::PayPeriod, config);
                     let d = match modifier {
                         PeriodModifier::Next => d + Duration::days(config.pay_period_length as i64),
                         PeriodModifier::Last => d - Duration::days(config.pay_period_length as i64),
@@ -1207,7 +1241,7 @@ fn handle_specific_period(
     if let Some(moment) = moment.name("year") {
         let year = year(moment, config);
         return Ok(moment_to_period(
-            NaiveDate::from_ymd(year, 1, 1).and_hms(0, 0, 0),
+            config.ymd(year, 1, 1).and_hms(0, 0, 0),
             &Period::Year,
             config,
         ));
@@ -1262,10 +1296,10 @@ impl PeriodModifier {
     }
 }
 
-fn handle_specific_time(
+fn handle_specific_time<T: TimeZone>(
     moment: &Match,
-    config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+    config: &Config<T>,
+) -> Result<(DateTime<T>, DateTime<T>), TimeError> {
     if let Some(moment) = moment.name("precise_time") {
         return match n_date(moment, config) {
             Err(s) => Err(s),
@@ -1284,16 +1318,16 @@ fn handle_specific_time(
         };
     }
     return if moment.has("first_time") {
-        Ok(moment_to_period(first_moment(), &config.period, config))
+        Ok(moment_to_period(config.first_moment(), &config.period, config))
     } else {
-        Ok((last_moment(), last_moment()))
+        Ok((config.last_moment(), config.last_moment()))
     };
 }
 
-fn handle_one_time(
+fn handle_one_time<T: TimeZone>(
     moment: &Match,
-    config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime, bool), TimeError> {
+    config: &Config<T>,
+) -> Result<(DateTime<T>, DateTime<T>, bool), TimeError> {
     let r = if moment.has("specific_day") {
         handle_specific_day(moment, config)
     } else if let Some(moment) = moment.name("specific_period") {
@@ -1310,7 +1344,7 @@ fn handle_one_time(
 }
 
 // add time to a date
-fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (NaiveDateTime, NaiveDateTime) {
+fn moment_and_time<T: TimeZone>(config: &Config<T>, daytime: Option<&Match>) -> (DateTime<T>, DateTime<T>) {
     if let Some(daytime) = daytime {
         let (hour, minute, second, is_midnight) = time(daytime);
         let mut m = config
@@ -1326,20 +1360,20 @@ fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (NaiveDateTime, 
         }
         moment_to_period(m, &Period::Second, config)
     } else {
-        moment_to_period(config.now, &config.period, config)
+        moment_to_period(config.now.clone(), &config.period, config)
     }
 }
 
-fn relative_moment(
+fn relative_moment<T: TimeZone>(
     m: &Match,
-    config: &Config,
-    other_time: &NaiveDateTime,
+    config: &Config<T>,
+    other_time: &DateTime<T>,
     before: bool, // whether the time found should be before or after the reference time
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+) -> Result<(DateTime<T>, DateTime<T>), TimeError> {
     if let Some(a_month_and_a_day) = m.name("a_day_in_month") {
         return match month_and_a_day(a_month_and_a_day, config, other_time, before) {
             Ok(d) => Ok(moment_and_time(
-                &config.now(d.and_hms(0, 0, 0)).period(Period::Day),
+                &config.clone().now(d.and_hms(0, 0, 0)).period(Period::Day),
                 m.name("time"),
             )),
             Err(e) => Err(e),
@@ -1357,7 +1391,7 @@ fn relative_moment(
             d = d + Duration::days(7);
         }
         return Ok(moment_and_time(
-            &config.now(d.and_hms(0, 0, 0)).period(Period::Day),
+            &config.clone().now(d.and_hms(0, 0, 0)).period(Period::Day),
             m.name("time"),
         ));
     }
@@ -1395,7 +1429,7 @@ fn relative_moment(
                 other_time.year()
             }
         };
-        let d = NaiveDate::from_ymd(year, month, 1).and_hms(0, 0, 0);
+        let d = config.ymd(year, month, 1).and_hms(0, 0, 0);
         let (d1, d2) = moment_to_period(d, &Period::Month, config);
         if before && d1 >= *other_time {
             return Ok(moment_to_period(
@@ -1416,12 +1450,12 @@ fn relative_moment(
 }
 
 // for things like "the fifth", "March fifth", "5-6"
-fn month_and_a_day(
+fn month_and_a_day<T: TimeZone>(
     m: &Match,
-    config: &Config,
-    other_time: &NaiveDateTime,
+    config: &Config<T>,
+    other_time: &DateTime<T>,
     before: bool,
-) -> Result<NaiveDate, TimeError> {
+) -> Result<Date<T>, TimeError> {
     if m.has("ordinal_day") {
         let mut year = config.now.year();
         let mut month = other_time.month();
@@ -1433,9 +1467,9 @@ fn month_and_a_day(
         };
         // search backwards through the calendar for a possible day
         for _ in 0..4 * 7 * 12 {
-            if let Some(d) = NaiveDate::from_ymd_opt(year, month, day) {
+            if let Some(d) = config.ymd_opt(year, month, day) {
                 if wd.is_none() || d.weekday() == wd.unwrap() {
-                    return Ok(d);
+                    return Ok(d.into());
                 }
             }
             if month == 1 {
@@ -1473,8 +1507,8 @@ fn month_and_a_day(
             other_time.year()
         }
     };
-    match NaiveDate::from_ymd_opt(year, month, day) {
-        Some(d) => Ok(d),
+    match config.ymd_opt(year, month, day) {
+        Some(d) => Ok(d.into()),
         None => Err(TimeError::ImpossibleDate(format!(
             "could not construct date from {} with year {}, month {}, and day {}",
             m.as_str(),
@@ -1485,10 +1519,10 @@ fn month_and_a_day(
     }
 }
 
-fn specific_moment(
+fn specific_moment<T: TimeZone>(
     m: &Match,
-    config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+    config: &Config<T>,
+) -> Result<(DateTime<T>, DateTime<T>), TimeError> {
     if m.has("specific_day") {
         return handle_specific_day(m, config);
     }
@@ -1577,7 +1611,7 @@ fn n_month(m: &Match) -> u32 {
     cap[1].parse::<u32>().unwrap()
 }
 
-fn year(m: &Match, config: &Config) -> i32 {
+fn year<T: TimeZone>(m: &Match, config: &Config<T>) -> i32 {
     let year = m.name("year").unwrap();
     if let Some(sy) = year.name("short_year") {
         let y = s_to_n(sy.as_str()) as i32;
@@ -1752,77 +1786,81 @@ fn ordinal(s: &str) -> u32 {
 }
 
 /// expand a moment to the period containing it
-fn moment_to_period(
-    now: NaiveDateTime,
+fn moment_to_period<T: TimeZone>(
+    now: DateTime<T>,
     period: &Period,
-    config: &Config,
-) -> (NaiveDateTime, NaiveDateTime) {
-    match period {
-        Period::Year => {
-            let d1 = NaiveDate::from_ymd(now.year(), 1, 1).and_hms(0, 0, 0);
-            let d2 = NaiveDate::from_ymd(now.year() + 1, 1, 1).and_hms(0, 0, 0);
-            (d1, d2)
-        }
-        Period::Month => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), 1).and_hms(0, 0, 0);
-            let d2 = if now.month() == 12 {
-                NaiveDate::from_ymd(now.year() + 1, 1, 1)
-            } else {
-                NaiveDate::from_ymd(now.year(), now.month() + 1, 1)
+    config: &Config<T>,
+) -> (DateTime<T>, DateTime<T>) {
+    if !config.select_instant {
+        match period {
+            Period::Year => {
+                let d1 = config.ymd(now.year(), 1, 1).and_hms(0, 0, 0);
+                let d2 = config.ymd(now.year() + 1, 1, 1).and_hms(0, 0, 0);
+                (d1, d2)
             }
-            .and_hms(0, 0, 0);
-            (d1, d2)
-        }
-        Period::Week => {
-            let offset = if config.monday_starts_week {
-                now.weekday().num_days_from_monday()
-            } else {
-                now.weekday().num_days_from_sunday()
-            };
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0)
-                - Duration::days(offset as i64);
-            (d1, d1 + Duration::days(7))
-        }
-        Period::Day => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0);
-            (d1, d1 + Duration::days(1))
-        }
-        Period::Hour => {
-            let d1 =
-                NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(now.hour(), 0, 0);
-            (d1, d1 + Duration::hours(1))
-        }
-        Period::Minute => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(
-                now.hour(),
-                now.minute(),
-                0,
-            );
-            (d1, d1 + Duration::minutes(1))
-        }
-        Period::Second => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(
-                now.hour(),
-                now.minute(),
-                now.second(),
-            );
-            (d1, d1 + Duration::seconds(1))
-        }
-        Period::PayPeriod => {
-            if let Some(pps) = config.pay_period_start {
-                // find the current pay period start
-                let offset = now.num_days_from_ce() - pps.num_days_from_ce();
-                let ppl = config.pay_period_length as i32;
-                let mut offset = (offset % ppl) as i64;
-                if offset < 0 {
-                    offset += config.pay_period_length as i64;
+            Period::Month => {
+                let d1 = config.ymd(now.year(), now.month(), 1).and_hms(0, 0, 0);
+                let d2 = if now.month() == 12 {
+                    config.ymd(now.year() + 1, 1, 1)
+                } else {
+                    config.ymd(now.year(), now.month() + 1, 1)
                 }
-                let d1 = (now.date() - Duration::days(offset)).and_hms(0, 0, 0);
-                (d1, d1 + Duration::days(config.pay_period_length as i64))
-            } else {
-                unreachable!()
+                .and_hms(0, 0, 0);
+                (d1, d2)
+            }
+            Period::Week => {
+                let offset = if config.monday_starts_week {
+                    now.weekday().num_days_from_monday()
+                } else {
+                    now.weekday().num_days_from_sunday()
+                };
+                let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0)
+                    - Duration::days(offset as i64);
+                (d1.clone(), d1 + Duration::days(7))
+            }
+            Period::Day => {
+                let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0);
+                (d1.clone(), d1 + Duration::days(1))
+            }
+            Period::Hour => {
+                let d1 =
+                    config.ymd(now.year(), now.month(), now.day()).and_hms(now.hour(), 0, 0);
+                (d1.clone(), d1 + Duration::hours(1))
+            }
+            Period::Minute => {
+                let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(
+                    now.hour(),
+                    now.minute(),
+                    0,
+                );
+                (d1.clone(), d1 + Duration::minutes(1))
+            }
+            Period::Second => {
+                let d1 = config.ymd(now.year(), now.month(), now.day()).and_hms(
+                    now.hour(),
+                    now.minute(),
+                    now.second(),
+                );
+                (d1.clone(), d1 + Duration::seconds(1))
+            }
+            Period::PayPeriod => {
+                if let Some(pps) = &config.pay_period_start {
+                    // find the current pay period start
+                    let offset = now.num_days_from_ce() - pps.num_days_from_ce();
+                    let ppl = config.pay_period_length as i32;
+                    let mut offset = (offset % ppl) as i64;
+                    if offset < 0 {
+                        offset += config.pay_period_length as i64;
+                    }
+                    let d1 = (now.date() - Duration::days(offset)).and_hms(0, 0, 0);
+                    (d1.clone(), d1 + Duration::days(config.pay_period_length as i64))
+                } else {
+                    unreachable!()
+                }
             }
         }
+    } else {
+        (now.clone(), now + Duration::seconds(1))
     }
 }
 
@@ -1872,7 +1910,7 @@ fn weekday(s: &str) -> Weekday {
 }
 
 // adjust a period relative to another period -- e.g., "one week before June" or "five minutes around 12:00 PM"
-fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, NaiveDateTime) {
+fn adjust<T: TimeZone>(d1: DateTime<T>, d2: DateTime<T>, m: &Match) -> (DateTime<T>, DateTime<T>) {
     if let Some(adjustment) = m.name("adjustment") {
         let count = count(adjustment.name("count").unwrap()) as i64;
         let unit = match adjustment
@@ -1895,20 +1933,20 @@ fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, Na
                 if direction.len() == 6 {
                     // before
                     let d = d1 - unit;
-                    (d, d)
+                    (d.clone(), d)
                 } else {
                     // before and after
-                    (d1 - unit, d1 + unit)
+                    (d1.clone() - unit, d1 + unit)
                 }
             }
             _ => match direction.chars().nth(1).unwrap() {
                 'f' | 'F' => {
                     let d = d2 + unit;
-                    (d, d)
+                    (d.clone(), d)
                 }
                 _ => {
                     let d1 = d1 - Duration::milliseconds(unit.num_milliseconds() / 2);
-                    let d2 = d1 + unit;
+                    let d2 = d1.clone() + unit;
                     (d1, d2)
                 }
             },
@@ -1921,7 +1959,9 @@ fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, Na
 // for converting a few cardinal numbers and integer expressions
 fn count(m: &Match) -> u32 {
     let s = m.as_str();
-    if m.has("a_count") {
+    if m.has("a_single") {
+        1
+    } else if m.has("a_count") {
         // cardinal numbers
         match s.chars().nth(0).expect("impossibly short") {
             'o' | 'O' => 1,
