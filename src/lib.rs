@@ -15,8 +15,8 @@ separated by a preposition such as "to", "through", "up to", or "until".
 ```rust
 extern crate two_timer;
 use two_timer::{parse, Config};
-extern crate chrono;
-use chrono::naive::NaiveDate;
+extern crate time;
+use time::{Date, Month, Time};
 
 pub fn main() {
     let phrases = [
@@ -44,7 +44,7 @@ pub fn main() {
             Err(e) => println!("{:?}", e),
         }
     }
-    let now = NaiveDate::from_ymd_opt(1066, 10, 14).unwrap().and_hms(12, 30, 15);
+    let now = Date::from_calendar_date(1066, Month::October, 14).unwrap().with_time(Time::from_hms(12, 30, 15).unwrap());
     println!("\nlet \"now\" be some moment during the Battle of Hastings, specifically {}\n", now);
     let conf = Config::new().now(now);
     for phrase in phrases.iter() {
@@ -224,12 +224,12 @@ only the typical expressions used with JobLog, falling back on the full grammar 
 extern crate pidgin;
 #[macro_use]
 extern crate lazy_static;
-extern crate chrono;
+extern crate time;
 extern crate serde_json;
-use chrono::naive::{NaiveDate, NaiveDateTime};
-use chrono::{Datelike, Duration, Local, Timelike, Weekday};
+use time::{Date, PrimitiveDateTime, Duration, Month, Time, Weekday};
 use pidgin::{Grammar, Match, Matcher};
 use regex::Regex;
+use std::convert::TryFrom;
 
 lazy_static! {
     // making this public is useful for testing, but best to keep it hidden to
@@ -623,7 +623,7 @@ pub fn parsable(phrase: &str) -> bool {
 pub fn parse(
     phrase: &str,
     config: Option<Config>,
-) -> Result<(NaiveDateTime, NaiveDateTime, bool), TimeError> {
+) -> Result<(PrimitiveDateTime, PrimitiveDateTime, bool), TimeError> {
     let parse = if cfg!(feature = "small_grammar") {
         SMALL_MATCHER
             .parse(phrase)
@@ -790,19 +790,20 @@ pub fn parse(
 /// of time expressions.
 #[derive(Debug, Clone)]
 pub struct Config {
-    now: NaiveDateTime,
+    now: PrimitiveDateTime,
     monday_starts_week: bool,
     period: Period,
     pay_period_length: u32,
-    pay_period_start: Option<NaiveDate>,
+    pay_period_start: Option<Date>,
     default_to_past: bool,
 }
 
 impl Config {
     /// Constructs an expression with the default parameters.
     pub fn new() -> Config {
+        let now = time::OffsetDateTime::now_utc();
         Config {
-            now: Local::now().naive_local(),
+            now: now.date().with_time(now.time()),
             monday_starts_week: true,
             period: Period::Minute,
             pay_period_length: 7,
@@ -812,7 +813,7 @@ impl Config {
     }
     /// Returns a copy of the configuration parameters with the "now" moment
     /// set to the parameter supplied.
-    pub fn now(&self, n: NaiveDateTime) -> Config {
+    pub fn now(&self, n: PrimitiveDateTime) -> Config {
         let mut c = self.clone();
         c.now = n;
         c
@@ -843,7 +844,7 @@ impl Config {
     /// date for a pay period set to the parameter supplied. By default this date
     /// is undefined. Unless it is defined, expressions containing the phrase "pay period"
     /// or "pp" cannot be interpreted.
-    pub fn pay_period_start(&self, pay_period_start: Option<NaiveDate>) -> Config {
+    pub fn pay_period_start(&self, pay_period_start: Option<Date>) -> Config {
         let mut c = self.clone();
         c.pay_period_start = pay_period_start;
         c
@@ -909,7 +910,7 @@ impl std::fmt::Display for TimeError {
 
 // for the end time, if the span is less than a day, use the first, otherwise use the second
 // e.g., Monday through Friday at 3 PM should end at 3 PM, but Monday through Friday should end at the end of Friday
-fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDateTime {
+fn pick_terminus(d1: PrimitiveDateTime, d2: PrimitiveDateTime, through: bool) -> PrimitiveDateTime {
     if through {
         d2
     } else {
@@ -926,8 +927,8 @@ fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDa
 /// # use two_timer::first_moment;
 /// println!("{}", first_moment()); // -262144-01-01 00:00:00
 /// ```
-pub fn first_moment() -> NaiveDateTime {
-    chrono::naive::MIN_DATE.and_hms_milli(0, 0, 0, 0)
+pub fn first_moment() -> PrimitiveDateTime {
+    Date::MIN.midnight()
 }
 
 /// The moment regarded as the end of time.
@@ -939,31 +940,29 @@ pub fn first_moment() -> NaiveDateTime {
 /// # use two_timer::last_moment;
 /// println!("{}", last_moment()); // +262143-12-31 23:59:59.999
 /// ```
-pub fn last_moment() -> NaiveDateTime {
-    chrono::naive::MAX_DATE.and_hms_milli(23, 59, 59, 999)
+pub fn last_moment() -> PrimitiveDateTime {
+    Date::MAX.with_time(Time::from_hms_milli(23, 59, 59, 999).unwrap())
 }
 
 fn specific(m: &Match) -> bool {
     m.has("specific_day") || m.has("specific_period") || m.has("specific_time")
 }
 
-fn n_date(date: &Match, config: &Config) -> Result<NaiveDate, TimeError> {
+fn n_date(date: &Match, config: &Config) -> Result<Date, TimeError> {
     let year = year(date, config);
     let month = n_month(date);
     let day = n_day(date);
-    match NaiveDate::from_ymd_opt(year, month, day) {
-        None => Err(TimeError::ImpossibleDate(format!(
+    Date::from_calendar_date(year, month, day).map_err(|_|
+        TimeError::ImpossibleDate(format!(
             "cannot construct date with year {}, month {}, and day {}",
             year, month, day
-        ))),
-        Some(d) => Ok(d),
-    }
+        )))
 }
 
 fn handle_specific_day(
     m: &Match,
     config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+) -> Result<(PrimitiveDateTime, PrimitiveDateTime), TimeError> {
     let now = config.now.clone();
     let mut times = m.all_names("time");
     if times.len() > 1 {
@@ -1004,7 +1003,7 @@ fn handle_specific_day(
             return match n_date(date, config) {
                 Err(s) => Err(s),
                 Ok(d1) => {
-                    let d1 = d1.and_hms(0, 0, 0);
+                    let d1 = d1.midnight();
                     Ok(moment_and_time(
                         &Config::new().now(d1).period(Period::Day),
                         time,
@@ -1020,17 +1019,17 @@ fn handle_specific_day(
             } else {
                 o_day(date, month)
             };
-            let d_opt = NaiveDate::from_ymd_opt(year, month, day);
+            let d_opt = Date::from_calendar_date(year, month, day);
             return match d_opt {
-                None => Err(TimeError::ImpossibleDate(format!(
+                Err(_) => Err(TimeError::ImpossibleDate(format!(
                     "cannot construct date with year {}, month {}, and day {}",
                     year, month, day
                 ))),
-                Some(d1) => {
+                Ok(d1) => {
                     if let Some(wd) = date.name("a_day") {
                         let wd = weekday(wd.as_str());
                         if wd == d1.weekday() {
-                            let d1 = d1.and_hms(0, 0, 0);
+                            let d1 = d1.midnight();
                             Ok(moment_and_time(
                                 &Config::new().now(d1).period(Period::Day),
                                 time,
@@ -1045,7 +1044,7 @@ fn handle_specific_day(
                             )))
                         }
                     } else {
-                        let d1 = d1.and_hms(0, 0, 0);
+                        let d1 = d1.midnight();
                         Ok(moment_and_time(
                             &Config::new().now(d1).period(Period::Day),
                             time,
@@ -1062,7 +1061,7 @@ fn handle_specific_day(
 fn handle_specific_period(
     moment: &Match,
     config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+) -> Result<(PrimitiveDateTime, PrimitiveDateTime), TimeError> {
     if let Some(moment) = moment.name("relative_period") {
         let count = count(moment.name("count").unwrap()) as i64;
         let (displacement, period) = match moment
@@ -1101,10 +1100,10 @@ fn handle_specific_period(
     if let Some(moment) = moment.name("month_and_year") {
         let y = year(moment, &config);
         let m = a_month(moment);
-        return match NaiveDate::from_ymd_opt(y, m, 1) {
-            None => unreachable!(),
-            Some(d1) => {
-                let d1 = d1.and_hms(0, 0, 0);
+        return match Date::from_calendar_date(y, m, 1) {
+            Err(_) => unreachable!(),
+            Ok(d1) => {
+                let d1 = d1.midnight();
                 Ok(moment_and_time(
                     &Config::new().now(d1).period(Period::Month),
                     None,
@@ -1115,26 +1114,26 @@ fn handle_specific_period(
     if let Some(moment) = moment.name("modified_period") {
         let modifier = PeriodModifier::from_match(moment.name("modifier"));
         if let Some(month) = moment.name("a_month") {
-            let d = config.now.with_month(a_month(month)).unwrap();
+            let d = config.now.replace_month(a_month(month)).unwrap();
             let (d, _) = moment_to_period(d, &Period::Month, config);
             let d = match modifier {
-                PeriodModifier::Next => d.with_year(d.year() + 1).unwrap(),
-                PeriodModifier::Last => d.with_year(d.year() - 1).unwrap(),
+                PeriodModifier::Next => d.replace_year(d.year() + 1).unwrap(),
+                PeriodModifier::Last => d.replace_year(d.year() - 1).unwrap(),
                 PeriodModifier::This => d,
             };
             return Ok(moment_to_period(d, &Period::Month, config));
         }
         if let Some(wd) = moment.name("a_day") {
             let wd = weekday(wd.as_str());
-            let offset = config.now.weekday().num_days_from_monday() as i64
-                - wd.num_days_from_monday() as i64;
+            let offset = config.now.weekday().number_days_from_monday() as i64
+                - wd.number_days_from_monday() as i64;
             let d = config.now.date() - Duration::days(offset);
             let d = match modifier {
                 PeriodModifier::Next => d + Duration::days(7),
                 PeriodModifier::Last => d - Duration::days(7),
                 PeriodModifier::This => d,
             };
-            return Ok(moment_to_period(d.and_hms(0, 0, 0), &Period::Day, config));
+            return Ok(moment_to_period(d.midnight(), &Period::Day, config));
         }
         return match ModifiablePeriod::from_match(moment.name("modifiable_period").unwrap()) {
             ModifiablePeriod::Week => {
@@ -1161,17 +1160,17 @@ fn handle_specific_period(
                 let (d, _) = moment_to_period(config.now, &Period::Month, config);
                 let d = match modifier {
                     PeriodModifier::Next => {
-                        if d.month() == 12 {
-                            d.with_year(d.year() + 1).unwrap().with_month(1).unwrap()
+                        if d.month() == Month::December {
+                            d.replace_year(d.year() + 1).unwrap().replace_month(Month::January).unwrap()
                         } else {
-                            d.with_month(d.month() + 1).unwrap()
+                            d.replace_month(d.month().next()).unwrap()
                         }
                     }
                     PeriodModifier::Last => {
-                        if d.month() == 1 {
-                            d.with_year(d.year() - 1).unwrap().with_month(12).unwrap()
+                        if d.month() == Month::January {
+                            d.replace_year(d.year() - 1).unwrap().replace_month(Month::December).unwrap()
                         } else {
-                            d.with_month(d.month() - 1).unwrap()
+                            d.replace_month(d.month().previous()).unwrap()
                         }
                     }
                     PeriodModifier::This => d,
@@ -1181,8 +1180,8 @@ fn handle_specific_period(
             ModifiablePeriod::Year => {
                 let (d, _) = moment_to_period(config.now, &Period::Year, config);
                 let d = match modifier {
-                    PeriodModifier::Next => d.with_year(d.year() + 1).unwrap(),
-                    PeriodModifier::Last => d.with_year(d.year() - 1).unwrap(),
+                    PeriodModifier::Next => d.replace_year(d.year() + 1).unwrap(),
+                    PeriodModifier::Last => d.replace_year(d.year() - 1).unwrap(),
                     PeriodModifier::This => d,
                 };
                 Ok(moment_to_period(d, &Period::Year, config))
@@ -1207,7 +1206,7 @@ fn handle_specific_period(
     if let Some(moment) = moment.name("year") {
         let year = year(moment, config);
         return Ok(moment_to_period(
-            NaiveDate::from_ymd(year, 1, 1).and_hms(0, 0, 0),
+            Date::from_calendar_date(year, Month::January, 1).unwrap().midnight(),
             &Period::Year,
             config,
         ));
@@ -1265,20 +1264,15 @@ impl PeriodModifier {
 fn handle_specific_time(
     moment: &Match,
     config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+) -> Result<(PrimitiveDateTime, PrimitiveDateTime), TimeError> {
     if let Some(moment) = moment.name("precise_time") {
         return match n_date(moment, config) {
             Err(s) => Err(s),
             Ok(d) => {
                 let (hour, minute, second, _) = time(moment);
                 let m = d
-                    .and_hms(0, 0, 0)
-                    .with_hour(hour)
-                    .unwrap()
-                    .with_minute(minute)
-                    .unwrap()
-                    .with_second(second)
-                    .unwrap();
+                    .midnight()
+                    .replace_time(Time::from_hms(hour, minute, second).unwrap());
                 Ok(moment_to_period(m, &Period::Second, config))
             }
         };
@@ -1293,7 +1287,7 @@ fn handle_specific_time(
 fn handle_one_time(
     moment: &Match,
     config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime, bool), TimeError> {
+) -> Result<(PrimitiveDateTime, PrimitiveDateTime, bool), TimeError> {
     let r = if moment.has("specific_day") {
         handle_specific_day(moment, config)
     } else if let Some(moment) = moment.name("specific_period") {
@@ -1310,17 +1304,11 @@ fn handle_one_time(
 }
 
 // add time to a date
-fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (NaiveDateTime, NaiveDateTime) {
+fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (PrimitiveDateTime, PrimitiveDateTime) {
     if let Some(daytime) = daytime {
         let (hour, minute, second, is_midnight) = time(daytime);
         let mut m = config
-            .now
-            .with_hour(hour)
-            .unwrap()
-            .with_minute(minute)
-            .unwrap()
-            .with_second(second)
-            .unwrap();
+            .now.replace_time(Time::from_hms(hour, minute, second).unwrap());
         if is_midnight {
             m = m + Duration::days(1); // midnight is second 0 *of the next day*
         }
@@ -1333,13 +1321,13 @@ fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (NaiveDateTime, 
 fn relative_moment(
     m: &Match,
     config: &Config,
-    other_time: &NaiveDateTime,
+    other_time: &PrimitiveDateTime,
     before: bool, // whether the time found should be before or after the reference time
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+) -> Result<(PrimitiveDateTime, PrimitiveDateTime), TimeError> {
     if let Some(a_month_and_a_day) = m.name("a_day_in_month") {
         return match month_and_a_day(a_month_and_a_day, config, other_time, before) {
             Ok(d) => Ok(moment_and_time(
-                &config.now(d.and_hms(0, 0, 0)).period(Period::Day),
+                &config.now(d.midnight()).period(Period::Day),
                 m.name("time"),
             )),
             Err(e) => Err(e),
@@ -1348,7 +1336,7 @@ fn relative_moment(
     if let Some(day) = m.name("a_day") {
         let wd = weekday(day.as_str());
         let mut delta =
-            other_time.weekday().num_days_from_sunday() as i64 - wd.num_days_from_sunday() as i64;
+            other_time.weekday().number_days_from_sunday() as i64 - wd.number_days_from_sunday() as i64;
         if delta <= 0 {
             delta += 7;
         }
@@ -1357,19 +1345,13 @@ fn relative_moment(
             d = d + Duration::days(7);
         }
         return Ok(moment_and_time(
-            &config.now(d.and_hms(0, 0, 0)).period(Period::Day),
+            &config.now(d.midnight()).period(Period::Day),
             m.name("time"),
         ));
     }
     if let Some(t) = m.name("time") {
         let (hour, minute, second, is_midnight) = time(t);
-        let mut t = other_time
-            .with_hour(hour)
-            .unwrap()
-            .with_minute(minute)
-            .unwrap()
-            .with_second(second)
-            .unwrap();
+        let mut t = other_time.replace_time(Time::from_hms(hour, minute, second).unwrap());
         if is_midnight {
             t = t + Duration::days(1); // midnight is second 0 *of the next day*
         }
@@ -1383,29 +1365,29 @@ fn relative_moment(
     if let Some(month) = m.name("a_month") {
         let month = a_month(month);
         let year = if before {
-            if month > other_time.month() {
+            if u8::from(month) > u8::from(other_time.month()) {
                 other_time.year() - 1
             } else {
                 other_time.year()
             }
         } else {
-            if month < other_time.month() {
+            if u8::from(month) < u8::from(other_time.month()) {
                 other_time.year() + 1
             } else {
                 other_time.year()
             }
         };
-        let d = NaiveDate::from_ymd(year, month, 1).and_hms(0, 0, 0);
+        let d = Date::from_calendar_date(year, month, 1).unwrap().midnight();
         let (d1, d2) = moment_to_period(d, &Period::Month, config);
         if before && d1 >= *other_time {
             return Ok(moment_to_period(
-                d1.with_year(d1.year() - 1).unwrap(),
+                d1.replace_year(d1.year() - 1).unwrap(),
                 &Period::Month,
                 config,
             ));
         } else if !before && d2 <= *other_time {
             return Ok(moment_to_period(
-                d1.with_year(d1.year() + 1).unwrap(),
+                d1.replace_year(d1.year() + 1).unwrap(),
                 &Period::Month,
                 config,
             ));
@@ -1419,9 +1401,9 @@ fn relative_moment(
 fn month_and_a_day(
     m: &Match,
     config: &Config,
-    other_time: &NaiveDateTime,
+    other_time: &PrimitiveDateTime,
     before: bool,
-) -> Result<NaiveDate, TimeError> {
+) -> Result<Date, TimeError> {
     if m.has("ordinal_day") {
         let mut year = config.now.year();
         let mut month = other_time.month();
@@ -1433,16 +1415,16 @@ fn month_and_a_day(
         };
         // search backwards through the calendar for a possible day
         for _ in 0..4 * 7 * 12 {
-            if let Some(d) = NaiveDate::from_ymd_opt(year, month, day) {
-                if wd.is_none() || d.weekday() == wd.unwrap() {
+            if let Ok(d) = Date::from_calendar_date(year, month, day) {
+                if wd.map_or(true, |w| w == d.weekday()) {
                     return Ok(d);
                 }
             }
-            if month == 1 {
-                month = 12;
+            if month == Month::January {
+                month = Month::December;
                 year -= 1;
             } else {
-                month -= 1;
+                month = month.previous();
             }
         }
         return Err(TimeError::ImpossibleDate(format!(
@@ -1467,28 +1449,26 @@ fn month_and_a_day(
     let year = if before {
         config.now.year()
     } else {
-        if month < other_time.month() {
+        if u8::from(month) < u8::from(other_time.month()) {
             other_time.year() + 1
         } else {
             other_time.year()
         }
     };
-    match NaiveDate::from_ymd_opt(year, month, day) {
-        Some(d) => Ok(d),
-        None => Err(TimeError::ImpossibleDate(format!(
+    Date::from_calendar_date(year, month, day).map_err(|_|
+        TimeError::ImpossibleDate(format!(
             "could not construct date from {} with year {}, month {}, and day {}",
             m.as_str(),
             year,
             month,
             day
-        ))),
-    }
+        )))
 }
 
 fn specific_moment(
     m: &Match,
     config: &Config,
-) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
+) -> Result<(PrimitiveDateTime, PrimitiveDateTime), TimeError> {
     if m.has("specific_day") {
         return handle_specific_day(m, config);
     }
@@ -1501,30 +1481,30 @@ fn specific_moment(
     unreachable!()
 }
 
-fn a_month(m: &Match) -> u32 {
+fn a_month(m: &Match) -> Month {
     match m.name("a_month").unwrap().as_str()[0..3]
         .to_lowercase()
         .as_ref()
     {
-        "jan" => 1,
-        "feb" => 2,
-        "mar" => 3,
-        "apr" => 4,
-        "may" => 5,
-        "jun" => 6,
-        "jul" => 7,
-        "aug" => 8,
-        "sep" => 9,
-        "oct" => 10,
-        "nov" => 11,
-        "dec" => 12,
+        "jan" => Month::January,
+        "feb" => Month::February,
+        "mar" => Month::March,
+        "apr" => Month::April,
+        "may" => Month::May,
+        "jun" => Month::June,
+        "jul" => Month::July,
+        "aug" => Month::August,
+        "sep" => Month::September,
+        "oct" => Month::October,
+        "nov" => Month::November,
+        "dec" => Month::December,
         _ => unreachable!(),
     }
 }
 
 // extract hour, minute, and second from time match
 // last parameter is basically whether the value returned is for "midnight", which requires special handling
-fn time(m: &Match) -> (u32, u32, u32, bool) {
+fn time(m: &Match) -> (u8, u8, u8, bool) {
     if let Some(m) = m.name("named_time") {
         return match m.as_str().chars().nth(0).unwrap() {
             'n' | 'N' => (12, 0, 0, false),
@@ -1532,14 +1512,14 @@ fn time(m: &Match) -> (u32, u32, u32, bool) {
         };
     }
     let hour = if let Some(hour_24) = m.name("hour_24") {
-        let hour = s_to_n(hour_24.name("h24").unwrap().as_str());
+        let hour = s_to_n(hour_24.name("h24").unwrap().as_str()) as u8;
         if hour == 24 {
             0
         } else {
             hour
         }
     } else if let Some(hour_12) = m.name("hour_12") {
-        let mut hour = s_to_n(hour_12.name("h12").unwrap().as_str());
+        let mut hour = s_to_n(hour_12.name("h12").unwrap().as_str()) as u8;
         hour = if let Some(am_pm) = m.name("am_pm") {
             match am_pm.as_str().chars().nth(0).expect("empty string") {
                 'a' | 'A' => hour,
@@ -1557,9 +1537,9 @@ fn time(m: &Match) -> (u32, u32, u32, bool) {
         unreachable!()
     };
     if let Some(minute) = m.name("minute") {
-        let minute = s_to_n(minute.as_str());
+        let minute = s_to_n(minute.as_str()) as u8;
         if let Some(second) = m.name("second") {
-            let second = s_to_n(second.as_str());
+            let second = s_to_n(second.as_str()) as u8;
             (hour, minute, second, false)
         } else {
             (hour, minute, 0, false)
@@ -1569,12 +1549,12 @@ fn time(m: &Match) -> (u32, u32, u32, bool) {
     }
 }
 
-fn n_month(m: &Match) -> u32 {
+fn n_month(m: &Match) -> Month {
     lazy_static! {
         static ref MONTH: Regex = Regex::new(r"\A0?(\d{1,2})\z").unwrap();
     }
     let cap = MONTH.captures(m.name("n_month").unwrap().as_str()).unwrap();
-    cap[1].parse::<u32>().unwrap()
+    Month::try_from(cap[1].parse::<u8>().unwrap()).unwrap()
 }
 
 fn year(m: &Match, config: &Config) -> i32 {
@@ -1623,30 +1603,30 @@ fn s_to_n(s: &str) -> u32 {
     S_TO_N.captures(s).unwrap()[1].parse::<u32>().unwrap()
 }
 
-fn n_day(m: &Match) -> u32 {
-    m.name("n_day").unwrap().as_str().parse::<u32>().unwrap()
+fn n_day(m: &Match) -> u8 {
+    m.name("n_day").unwrap().as_str().parse().unwrap()
 }
 
-fn o_day(m: &Match, month: u32) -> u32 {
+fn o_day(m: &Match, month: Month) -> u8 {
     let m = m.name("o_day").unwrap();
     let s = m.as_str();
     if m.has("a_ordinal") {
         ordinal(s)
     } else if m.has("n_ordinal") {
-        s[0..s.len() - 2].parse::<u32>().unwrap()
+        s[0..s.len() - 2].parse::<u8>().unwrap()
     } else {
         // roman
         match s.chars().nth(0).expect("empty string") {
             'n' | 'N' => {
                 // nones
-                match month {
+                match u8::from(month) {
                     3 | 5 | 7 | 10 => 7, // March, May, July, October
                     _ => 5,
                 }
             }
             'i' | 'I' => {
                 // ides
-                match month {
+                match u8::from(month) {
                     3 | 5 | 7 | 10 => 15, // March, May, July, October
                     _ => 13,
                 }
@@ -1657,7 +1637,7 @@ fn o_day(m: &Match, month: u32) -> u32 {
 }
 
 // converts the ordinals up to thirty-first
-fn ordinal(s: &str) -> u32 {
+fn ordinal(s: &str) -> u8 {
     match s.chars().nth(0).expect("empty string") {
         'f' | 'F' => {
             match s.chars().nth(1).expect("too short") {
@@ -1753,71 +1733,71 @@ fn ordinal(s: &str) -> u32 {
 
 /// expand a moment to the period containing it
 fn moment_to_period(
-    now: NaiveDateTime,
+    now: PrimitiveDateTime,
     period: &Period,
     config: &Config,
-) -> (NaiveDateTime, NaiveDateTime) {
+) -> (PrimitiveDateTime, PrimitiveDateTime) {
     match period {
         Period::Year => {
-            let d1 = NaiveDate::from_ymd(now.year(), 1, 1).and_hms(0, 0, 0);
-            let d2 = NaiveDate::from_ymd(now.year() + 1, 1, 1).and_hms(0, 0, 0);
+            let d1 = Date::from_calendar_date(now.year(), Month::January, 1).unwrap().midnight();
+            let d2 = Date::from_calendar_date(now.year() + 1, Month::January, 1).unwrap().midnight();
             (d1, d2)
         }
         Period::Month => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), 1).and_hms(0, 0, 0);
-            let d2 = if now.month() == 12 {
-                NaiveDate::from_ymd(now.year() + 1, 1, 1)
+            let d1 = Date::from_calendar_date(now.year(), now.month(), 1).unwrap().midnight();
+            let d2 = if now.month() == Month::December {
+                Date::from_calendar_date(now.year() + 1, Month::January, 1)
             } else {
-                NaiveDate::from_ymd(now.year(), now.month() + 1, 1)
+                Date::from_calendar_date(now.year(), now.month().next(), 1)
             }
-            .and_hms(0, 0, 0);
+            .unwrap().midnight();
             (d1, d2)
         }
         Period::Week => {
             let offset = if config.monday_starts_week {
-                now.weekday().num_days_from_monday()
+                now.weekday().number_days_from_monday()
             } else {
-                now.weekday().num_days_from_sunday()
+                now.weekday().number_days_from_sunday()
             };
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0)
+            let d1 = Date::from_calendar_date(now.year(), now.month(), now.day()).unwrap().midnight()
                 - Duration::days(offset as i64);
             (d1, d1 + Duration::days(7))
         }
         Period::Day => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0);
+            let d1 = Date::from_calendar_date(now.year(), now.month(), now.day()).unwrap().midnight();
             (d1, d1 + Duration::days(1))
         }
         Period::Hour => {
             let d1 =
-                NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(now.hour(), 0, 0);
+                Date::from_calendar_date(now.year(), now.month(), now.day()).unwrap().with_hms(now.hour(), 0, 0).unwrap();
             (d1, d1 + Duration::hours(1))
         }
         Period::Minute => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(
+            let d1 = Date::from_calendar_date(now.year(), now.month(), now.day()).unwrap().with_hms(
                 now.hour(),
                 now.minute(),
                 0,
-            );
+            ).unwrap();
             (d1, d1 + Duration::minutes(1))
         }
         Period::Second => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(
+            let d1 = Date::from_calendar_date(now.year(), now.month(), now.day()).unwrap().with_hms(
                 now.hour(),
                 now.minute(),
                 now.second(),
-            );
+            ).unwrap();
             (d1, d1 + Duration::seconds(1))
         }
         Period::PayPeriod => {
             if let Some(pps) = config.pay_period_start {
                 // find the current pay period start
-                let offset = now.num_days_from_ce() - pps.num_days_from_ce();
+                let offset = now.to_julian_day() - pps.to_julian_day();
                 let ppl = config.pay_period_length as i32;
                 let mut offset = (offset % ppl) as i64;
                 if offset < 0 {
                     offset += config.pay_period_length as i64;
                 }
-                let d1 = (now.date() - Duration::days(offset)).and_hms(0, 0, 0);
+                let d1 = (now.date() - Duration::days(offset)).midnight();
                 (d1, d1 + Duration::days(config.pay_period_length as i64))
             } else {
                 unreachable!()
@@ -1840,39 +1820,39 @@ enum Period {
 
 fn weekday(s: &str) -> Weekday {
     match s.chars().nth(0).expect("empty string") {
-        'm' | 'M' => Weekday::Mon,
+        'm' | 'M' => Weekday::Monday,
         't' | 'T' => {
             if s.len() == 1 {
-                Weekday::Tue
+                Weekday::Tuesday
             } else {
                 match s.chars().nth(1).unwrap() {
-                    'u' | 'U' => Weekday::Tue,
-                    'h' | 'H' => Weekday::Thu,
+                    'u' | 'U' => Weekday::Tuesday,
+                    'h' | 'H' => Weekday::Thursday,
                     _ => unreachable!(),
                 }
             }
         }
-        'w' | 'W' => Weekday::Wed,
-        'H' => Weekday::Thu,
-        'F' | 'f' => Weekday::Fri,
+        'w' | 'W' => Weekday::Wednesday,
+        'H' => Weekday::Thursday,
+        'F' | 'f' => Weekday::Friday,
         'S' | 's' => {
             if s.len() == 1 {
-                Weekday::Sat
+                Weekday::Saturday
             } else {
                 match s.chars().nth(1).unwrap() {
-                    'a' | 'A' => Weekday::Sat,
-                    'u' | 'U' => Weekday::Sun,
+                    'a' | 'A' => Weekday::Saturday,
+                    'u' | 'U' => Weekday::Sunday,
                     _ => unreachable!(),
                 }
             }
         }
-        'U' => Weekday::Sun,
+        'U' => Weekday::Sunday,
         _ => unreachable!(),
     }
 }
 
 // adjust a period relative to another period -- e.g., "one week before June" or "five minutes around 12:00 PM"
-fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, NaiveDateTime) {
+fn adjust(d1: PrimitiveDateTime, d2: PrimitiveDateTime, m: &Match) -> (PrimitiveDateTime, PrimitiveDateTime) {
     if let Some(adjustment) = m.name("adjustment") {
         let count = count(adjustment.name("count").unwrap()) as i64;
         let unit = match adjustment
@@ -1907,7 +1887,7 @@ fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, Na
                     (d, d)
                 }
                 _ => {
-                    let d1 = d1 - Duration::milliseconds(unit.num_milliseconds() / 2);
+                    let d1 = d1 - Duration::milliseconds((unit.whole_milliseconds() / 2) as i64);
                     let d2 = d1 + unit;
                     (d1, d2)
                 }

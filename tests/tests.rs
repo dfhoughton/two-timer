@@ -1,8 +1,7 @@
 extern crate two_timer;
 use two_timer::{parsable, parse, Config, TimeError};
-extern crate chrono;
-use chrono::naive::NaiveDate;
-use chrono::{Duration, Local};
+extern crate time;
+use time::{Date, Duration, Month, OffsetDateTime, PrimitiveDateTime};
 
 // a debugging method to print out the parse tree
 // fn show_me(p: &str) {
@@ -16,8 +15,8 @@ fn can_use_parsable() {
 
 #[test]
 fn always() {
-    let alpha = chrono::naive::MIN_DATE.and_hms_milli(0, 0, 0, 0);
-    let omega = chrono::naive::MAX_DATE.and_hms_milli(23, 59, 59, 999);
+    let alpha = Date::MIN.midnight();
+    let omega = Date::MAX.with_hms_milli(23, 59, 59, 999).unwrap();
     for phrase in [
         "always",
         "ever",
@@ -34,9 +33,14 @@ fn always() {
     }
 }
 
+fn datetime() -> PrimitiveDateTime {
+    let now = OffsetDateTime::now_utc();
+    now.date().with_time(now.time())
+}
+
 #[test]
 fn yesterday() {
-    let now = Local::now().naive_local();
+    let now = datetime();
     let (start, end, _) = parse("yesterday", Some(Config::new().now(now))).unwrap();
     assert!(start < now);
     assert!(end < now);
@@ -49,7 +53,7 @@ fn yesterday() {
 
 #[test]
 fn tomorrow() {
-    let now = Local::now().naive_local();
+    let now = datetime();
     let (start, end, _) = parse("tomorrow", Some(Config::new().now(now))).unwrap();
     assert!(start > now);
     assert!(end > now);
@@ -62,7 +66,7 @@ fn tomorrow() {
 
 #[test]
 fn today() {
-    let now = Local::now().naive_local();
+    let now = datetime();
     let (start, end, _) = parse("today", Some(Config::new().now(now))).unwrap();
     assert!(start < now);
     assert!(end > now);
@@ -76,7 +80,7 @@ fn today() {
 
 #[test]
 fn day_5_6_69_at_3_30_pm() {
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 30, 0);
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(15, 30, 0).unwrap();
     for phrase in [
         "at 3:30 PM on 5-6-69",
         "3:30 p.m. on 5-6-69",
@@ -93,7 +97,7 @@ fn day_5_6_69_at_3_30_pm() {
 
 #[test]
 fn day_5_6_69_at_3_pm() {
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 0, 0);
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(15, 0, 0).unwrap();
     for phrase in [
         "at 3 PM on 5-6-69",
         "3 p.m. on 5-6-69",
@@ -110,7 +114,7 @@ fn day_5_6_69_at_3_pm() {
 
 #[test]
 fn day_5_6_69_at_3_30_00_pm() {
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 30, 0);
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(15, 30, 0).unwrap();
     for phrase in [
         "at 3:30:00 PM on 5-6-69",
         "3:30:00 p.m. on 5-6-69",
@@ -127,7 +131,7 @@ fn day_5_6_69_at_3_30_00_pm() {
 
 #[test]
 fn day_5_6_69_at_3_30_01_pm() {
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 30, 1);
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(15, 30, 1).unwrap();
     for phrase in [
         "at 3:30:01 PM on 5-6-69",
         "3:30:01 p.m. on 5-6-69",
@@ -144,7 +148,7 @@ fn day_5_6_69_at_3_30_01_pm() {
 
 #[test]
 fn day_5_6_69_at_3_30_01_am() {
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(3, 30, 1);
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(3, 30, 1).unwrap();
     for phrase in [
         "at 3:30:01 AM on 5-6-69",
         "3:30:01 a.m. on 5-6-69",
@@ -161,8 +165,8 @@ fn day_5_6_69_at_3_30_01_am() {
 
 #[test]
 fn at_3_pm() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(16, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(16, 0, 0).unwrap();
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(15, 0, 0).unwrap();
     for phrase in ["3 PM", "3 pm", "15"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
@@ -172,8 +176,8 @@ fn at_3_pm() {
 
 #[test]
 fn at_3_pm_default_to_future() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(14, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(14, 0, 0).unwrap();
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(15, 0, 0).unwrap();
     for phrase in ["3 PM", "3 pm", "15"].iter() {
         let (start, end, _) =
             parse(phrase, Some(Config::new().now(now).default_to_past(false))).unwrap();
@@ -184,8 +188,8 @@ fn at_3_pm_default_to_future() {
 
 #[test]
 fn at_3_00_pm() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(16, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(16, 0, 0).unwrap();
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(15, 0, 0).unwrap();
     for phrase in ["3:00 PM", "3:00 pm", "15:00"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
@@ -195,8 +199,8 @@ fn at_3_00_pm() {
 
 #[test]
 fn at_3_00_00_pm() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(16, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(15, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(16, 0, 0).unwrap();
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(15, 0, 0).unwrap();
     for phrase in ["3:00:00 PM", "3:00:00 pm", "15:00:00"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
@@ -206,8 +210,8 @@ fn at_3_00_00_pm() {
 
 #[test]
 fn at_3_pm_yesterday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(14, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 5).and_hms(15, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(14, 0, 0).unwrap();
+    let then = Date::from_calendar_date(1969, Month::May, 5).unwrap().with_hms(15, 0, 0).unwrap();
     for phrase in ["3 PM yesterday", "3 pm yesterday", "15 yesterday"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
@@ -217,7 +221,7 @@ fn at_3_pm_yesterday() {
 
 #[test]
 fn alphabetic_5_6_69() {
-    let then = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let then = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     for phrase in [
         "May 6, 1969",
         "May 6, '69",
@@ -260,7 +264,7 @@ fn alphabetic_5_6_69() {
 
 #[test]
 fn ymd_5_31_69() {
-    let then = NaiveDate::from_ymd(1969, 5, 31).and_hms(0, 0, 0);
+    let then = Date::from_calendar_date(1969, Month::May, 31).unwrap().midnight();
     for phrase in [
         "5-31-69",
         "5/31/69",
@@ -337,7 +341,7 @@ fn ymd_5_31_69() {
     ]
     .iter()
     {
-        let (start, end, _) = parse(phrase, None).unwrap();
+        let (start, end, _) = parse(dbg!(phrase), None).unwrap();
         assert_eq!(then, start);
         assert_eq!(then + Duration::days(1), end);
     }
@@ -353,8 +357,8 @@ fn leap_day() {
 
 #[test]
 fn may_1969() {
-    let m1 = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
-    let m2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let m1 = Date::from_calendar_date(1969, Month::May, 1).unwrap().midnight();
+    let m2 = Date::from_calendar_date(1969, Month::June, 1).unwrap().midnight();
     for phrase in ["May 1969", "May '69"].iter() {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(m1, start);
@@ -364,14 +368,14 @@ fn may_1969() {
 
 #[test]
 fn short_year_past_vs_future() {
-    let m1 = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
-    let m2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
-    let now = NaiveDate::from_ymd(2020, 5, 6).and_hms(0, 0, 0); 
+    let m1 = Date::from_calendar_date(1969, Month::May, 1).unwrap().midnight();
+    let m2 = Date::from_calendar_date(1969, Month::June, 1).unwrap().midnight();
+    let now = Date::from_calendar_date(2020, Month::May, 6).unwrap().midnight(); 
     let (start, end, _) = parse("May '69", Some(Config::new().now(now))).unwrap();
     assert_eq!(m1, start);
     assert_eq!(m2, end);
-    let m1 = NaiveDate::from_ymd(2069, 5, 1).and_hms(0, 0, 0);
-    let m2 = NaiveDate::from_ymd(2069, 6, 1).and_hms(0, 0, 0);
+    let m1 = Date::from_calendar_date(2069, Month::May, 1).unwrap().midnight();
+    let m2 = Date::from_calendar_date(2069, Month::June, 1).unwrap().midnight();
     let (start, end, _) = parse("May '69", Some(Config::new().now(now).default_to_past(false))).unwrap();
     assert_eq!(m1, start);
     assert_eq!(m2, end);
@@ -379,9 +383,9 @@ fn short_year_past_vs_future() {
 
 #[test]
 fn this_month() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::June, 1).unwrap().midnight();
     let (start, end, _) = parse("this month", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -389,9 +393,9 @@ fn this_month() {
 
 #[test]
 fn next_month() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 7, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::June, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::July, 1).unwrap().midnight();
     let (start, end, _) = parse("next month", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -399,9 +403,9 @@ fn next_month() {
 
 #[test]
 fn last_month() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 4, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::April, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 1).unwrap().midnight();
     let (start, end, _) = parse("last month", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -409,9 +413,9 @@ fn last_month() {
 
 #[test]
 fn this_year() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 1, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::January, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1970, Month::January, 1).unwrap().midnight();
     let (start, end, _) = parse("this year", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -419,9 +423,9 @@ fn this_year() {
 
 #[test]
 fn next_year() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1971, 1, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1970, Month::January, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1971, Month::January, 1).unwrap().midnight();
     let (start, end, _) = parse("next year", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -429,9 +433,9 @@ fn next_year() {
 
 #[test]
 fn last_year() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1968, 1, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 1, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1968, Month::January, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::January, 1).unwrap().midnight();
     let (start, end, _) = parse("last year", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -439,9 +443,9 @@ fn last_year() {
 
 #[test]
 fn this_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
     let (start, end, _) = parse("this week", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -449,9 +453,9 @@ fn this_week() {
 
 #[test]
 fn the_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
     let (start, end, _) = parse("the week", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -459,9 +463,9 @@ fn the_week() {
 
 #[test]
 fn next_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 19).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 19).unwrap().midnight();
     let (start, end, _) = parse("next week", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -469,9 +473,9 @@ fn next_week() {
 
 #[test]
 fn last_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 4, 28).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::April, 28).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
     let (start, end, _) = parse("last week", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -479,9 +483,9 @@ fn last_week() {
 
 #[test]
 fn this_week_sunday_starts() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 11).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 4).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 11).unwrap().midnight();
     let (start, end, _) = parse(
         "this week",
         Some(Config::new().now(now).monday_starts_week(false)),
@@ -493,9 +497,9 @@ fn this_week_sunday_starts() {
 
 #[test]
 fn next_week_sunday_starts() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 11).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 11).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 18).unwrap().midnight();
     let (start, end, _) = parse(
         "next week",
         Some(Config::new().now(now).monday_starts_week(false)),
@@ -507,9 +511,9 @@ fn next_week_sunday_starts() {
 
 #[test]
 fn last_week_sunday_starts() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 4, 27).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::April, 27).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 4).unwrap().midnight();
     let (start, end, _) = parse(
         "last week",
         Some(Config::new().now(now).monday_starts_week(false)),
@@ -521,14 +525,14 @@ fn last_week_sunday_starts() {
 
 #[test]
 fn this_pay_period() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     // two-week pay period beginning about a year before "now" on a Sunday
     let config = Config::new()
-        .pay_period_start(Some(NaiveDate::from_ymd(1968, 5, 5)))
+        .pay_period_start(Some(Date::from_calendar_date(1968, Month::May, 5).unwrap()))
         .pay_period_length(14)
         .now(now);
-    let d1 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::May, 4).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 18).unwrap().midnight();
     for pp in ["pp", "pay period", "payperiod"].iter() {
         let (start, end, _) = parse(format!("this {}", pp).as_ref(), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
@@ -538,14 +542,14 @@ fn this_pay_period() {
 
 #[test]
 fn bare_pay_period() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     // two-week pay period beginning about a year before "now" on a Sunday
     let config = Config::new()
-        .pay_period_start(Some(NaiveDate::from_ymd(1968, 5, 5)))
+        .pay_period_start(Some(Date::from_calendar_date(1968, Month::May, 5).unwrap()))
         .pay_period_length(14)
         .now(now);
-    let d1 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::May, 4).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 18).unwrap().midnight();
     for pp in ["pp", "pay period", "payperiod"].iter() {
         let (start, end, _) = parse(pp, Some(config.clone())).unwrap();
         assert_eq!(d1, start);
@@ -554,14 +558,14 @@ fn bare_pay_period() {
 }
 #[test]
 fn next_pay_period() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     // two-week pay period beginning about a year before "now" on a Sunday
     let config = Config::new()
-        .pay_period_start(Some(NaiveDate::from_ymd(1968, 5, 5)))
+        .pay_period_start(Some(Date::from_calendar_date(1968, Month::May, 5).unwrap()))
         .pay_period_length(14)
         .now(now);
-    let d1 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::May, 18).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::June, 1).unwrap().midnight();
     for pp in ["pp", "pay period", "payperiod"].iter() {
         let (start, end, _) = parse(&format!("next {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
@@ -571,14 +575,14 @@ fn next_pay_period() {
 
 #[test]
 fn last_pay_period() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     // two-week pay period beginning about a year before "now" on a Sunday
     let config = Config::new()
-        .pay_period_start(Some(NaiveDate::from_ymd(1968, 5, 5)))
+        .pay_period_start(Some(Date::from_calendar_date(1968, Month::May, 5).unwrap()))
         .pay_period_length(14)
         .now(now);
-    let d1 = NaiveDate::from_ymd(1969, 4, 20).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::April, 20).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 4).unwrap().midnight();
     for pp in ["pp", "pay period", "payperiod"].iter() {
         let (start, end, _) = parse(&format!("last {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
@@ -588,14 +592,14 @@ fn last_pay_period() {
 
 #[test]
 fn this_pay_period_weird() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     // two-week pay period beginning about a year *after* "now" on a Sunday
     let config = Config::new()
-        .pay_period_start(Some(NaiveDate::from_ymd(1970, 4, 5)))
+        .pay_period_start(Some(Date::from_calendar_date(1970, Month::April, 5).unwrap()))
         .pay_period_length(14)
         .now(now);
-    let d1 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::May, 4).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 18).unwrap().midnight();
     for pp in ["pp", "pay period", "payperiod"].iter() {
         let (start, end, _) = parse(&format!("this {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
@@ -605,14 +609,14 @@ fn this_pay_period_weird() {
 
 #[test]
 fn next_pay_period_weird() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     // two-week pay period beginning about a year *after* "now" on a Sunday
     let config = Config::new()
-        .pay_period_start(Some(NaiveDate::from_ymd(1970, 4, 5)))
+        .pay_period_start(Some(Date::from_calendar_date(1970, Month::April, 5).unwrap()))
         .pay_period_length(14)
         .now(now);
-    let d1 = NaiveDate::from_ymd(1969, 5, 18).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::May, 18).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::June, 1).unwrap().midnight();
     for pp in ["pp", "pay period", "payperiod"].iter() {
         let (start, end, _) = parse(&format!("next {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
@@ -622,14 +626,14 @@ fn next_pay_period_weird() {
 
 #[test]
 fn last_pay_period_weird() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     // two-week pay period beginning about a year *after* "now" on a Sunday
     let config = Config::new()
-        .pay_period_start(Some(NaiveDate::from_ymd(1970, 4, 5)))
+        .pay_period_start(Some(Date::from_calendar_date(1970, Month::April, 5).unwrap()))
         .pay_period_length(14)
         .now(now);
-    let d1 = NaiveDate::from_ymd(1969, 4, 20).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 4).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::April, 20).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 4).unwrap().midnight();
     for pp in ["pp", "pay period", "payperiod"].iter() {
         let (start, end, _) = parse(&format!("last {}", pp), Some(config.clone())).unwrap();
         assert_eq!(d1, start);
@@ -639,9 +643,9 @@ fn last_pay_period_weird() {
 
 #[test]
 fn this_april() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 4, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::April, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 1).unwrap().midnight();
     let (start, end, _) = parse("this april", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -649,9 +653,9 @@ fn this_april() {
 
 #[test]
 fn next_april() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1970, 4, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1970, 5, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1970, Month::April, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1970, Month::May, 1).unwrap().midnight();
     let (start, end, _) = parse("next april", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -659,9 +663,9 @@ fn next_april() {
 
 #[test]
 fn last_april() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1968, 4, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1968, 5, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1968, Month::April, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1968, Month::May, 1).unwrap().midnight();
     let (start, end, _) = parse("last april", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -669,9 +673,9 @@ fn last_april() {
 
 #[test]
 fn this_friday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 9).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 9).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
     let (start, end, _) = parse("this friday", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -679,9 +683,9 @@ fn this_friday() {
 
 #[test]
 fn next_friday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 16).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 16).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 17).unwrap().midnight();
     let (start, end, _) = parse("next friday", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -689,9 +693,9 @@ fn next_friday() {
 
 #[test]
 fn last_friday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 2).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 3).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 2).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 3).unwrap().midnight();
     let (start, end, _) = parse("last friday", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -699,9 +703,9 @@ fn last_friday() {
 
 #[test]
 fn this_monday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     let (start, end, _) = parse("this monday", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -709,9 +713,9 @@ fn this_monday() {
 
 #[test]
 fn next_monday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 13).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 13).unwrap().midnight();
     let (start, end, _) = parse("next monday", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -719,9 +723,9 @@ fn next_monday() {
 
 #[test]
 fn last_monday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 4, 28).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 4, 29).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::April, 28).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::April, 29).unwrap().midnight();
     let (start, end, _) = parse("last monday", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -729,7 +733,7 @@ fn last_monday() {
 
 #[test]
 fn dawn_of_time() {
-    let then = chrono::naive::MIN_DATE.and_hms_milli(0, 0, 0, 0);
+    let then = Date::MIN.midnight();
     for phrase in [
         "the beginning",
         "the beginning of time",
@@ -751,7 +755,7 @@ fn dawn_of_time() {
 
 #[test]
 fn the_crack_of_doom() {
-    let then = chrono::naive::MAX_DATE.and_hms_milli(23, 59, 59, 999);
+    let then = Date::MAX.with_hms_milli(23, 59, 59, 999).unwrap();
     for phrase in [
         "the end",
         "the end of time",
@@ -781,8 +785,8 @@ fn the_crack_of_doom() {
 
 #[test]
 fn friday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 2).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let then = Date::from_calendar_date(1969, Month::May, 2).unwrap().midnight();
     let (start, end, _) = parse("Friday", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::days(1), end);
@@ -790,8 +794,8 @@ fn friday() {
 
 #[test]
 fn tuesday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 4, 29).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let then = Date::from_calendar_date(1969, Month::April, 29).unwrap().midnight();
     let (start, end, _) = parse("Tuesday", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::days(1), end);
@@ -799,8 +803,8 @@ fn tuesday() {
 
 #[test]
 fn monday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let then = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
     let (start, end, _) = parse("Monday", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::days(1), end);
@@ -808,8 +812,8 @@ fn monday() {
 
 #[test]
 fn monday_default_to_future() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let then = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
     let (start, end, _) = parse(
         "Monday",
         Some(Config::new().now(now).default_to_past(false)),
@@ -821,8 +825,8 @@ fn monday_default_to_future() {
 
 #[test]
 fn friday_at_3_pm() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 2).and_hms(15, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let then = Date::from_calendar_date(1969, Month::May, 2).unwrap().with_hms(15, 0, 0).unwrap();
     let (start, end, _) = parse("Friday at 3 pm", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::seconds(1), end);
@@ -830,8 +834,8 @@ fn friday_at_3_pm() {
 
 #[test]
 fn tuesday_at_3_pm() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 4, 29).and_hms(15, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let then = Date::from_calendar_date(1969, Month::April, 29).unwrap().with_hms(15, 0, 0).unwrap();
     let (start, end, _) = parse("Tuesday at 3 pm", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::seconds(1), end);
@@ -839,8 +843,8 @@ fn tuesday_at_3_pm() {
 
 #[test]
 fn monday_at_3_pm() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 5).and_hms(15, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let then = Date::from_calendar_date(1969, Month::May, 5).unwrap().with_hms(15, 0, 0).unwrap();
     let (start, end, _) = parse("Monday at 3 pm", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
     assert_eq!(then + Duration::seconds(1), end);
@@ -848,8 +852,8 @@ fn monday_at_3_pm() {
 
 #[test]
 fn monday_at_3_pm_default_to_future() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let then = NaiveDate::from_ymd(1969, 5, 12).and_hms(15, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let then = Date::from_calendar_date(1969, Month::May, 12).unwrap().with_hms(15, 0, 0).unwrap();
     let (start, end, _) = parse(
         "Monday at 3 pm",
         Some(Config::new().now(now).default_to_past(false)),
@@ -861,9 +865,9 @@ fn monday_at_3_pm_default_to_future() {
 
 #[test]
 fn just_may() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::June, 1).unwrap().midnight();
     let (start, end, _) = parse("May", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -871,9 +875,9 @@ fn just_may() {
 
 #[test]
 fn just_april() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 4, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::April, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 1).unwrap().midnight();
     let (start, end, _) = parse("April", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -881,9 +885,9 @@ fn just_april() {
 
 #[test]
 fn just_june() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1968, 6, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1968, 7, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1968, Month::June, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1968, Month::July, 1).unwrap().midnight();
     let (start, end, _) = parse("June", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -891,9 +895,9 @@ fn just_june() {
 
 #[test]
 fn just_june_default_to_future() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 6, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 7, 1).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::June, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::July, 1).unwrap().midnight();
     let (start, end, _) =
         parse("June", Some(Config::new().now(now).default_to_past(false))).unwrap();
     assert_eq!(d1, start);
@@ -902,9 +906,9 @@ fn just_june_default_to_future() {
 
 #[test]
 fn monday_through_friday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
     let (start, end, _) = parse("Monday through Friday", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -912,9 +916,9 @@ fn monday_through_friday() {
 
 #[test]
 fn monday_through_friday_default_to_future() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 17).unwrap().midnight();
     let (start, end, _) = parse(
         "Monday through Friday",
         Some(Config::new().now(now).default_to_past(false)),
@@ -926,9 +930,9 @@ fn monday_through_friday_default_to_future() {
 
 #[test]
 fn tuesday_through_friday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 4, 29).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 3).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::April, 29).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 3).unwrap().midnight();
     let (start, end, _) = parse("Tuesday through Friday", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -936,9 +940,9 @@ fn tuesday_through_friday() {
 
 #[test]
 fn tuesday_through_3_pm_on_friday() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 4, 29).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 2).and_hms(15, 0, 1);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::April, 29).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 2).unwrap().with_hms(15, 0, 1).unwrap();
     let (start, end, _) = parse(
         "Tuesday through 3 PM on Friday",
         Some(Config::new().now(now)),
@@ -950,9 +954,9 @@ fn tuesday_through_3_pm_on_friday() {
 
 #[test]
 fn this_year_through_today() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 1, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 7).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::January, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 7).unwrap().midnight();
     let (start, end, _) = parse("this year through today", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -960,9 +964,9 @@ fn this_year_through_today() {
 
 #[test]
 fn noon_yesterday_through_midnight_today() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(12, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 7).and_hms(0, 0, 1);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 5).unwrap().with_hms(12, 0, 0).unwrap();
+    let d2 = Date::from_calendar_date(1969, Month::May, 7).unwrap().with_hms(0, 0, 1).unwrap();
     let (start, end, _) = parse(
         "noon yesterday through midnight today",
         Some(Config::new().now(now)),
@@ -974,8 +978,8 @@ fn noon_yesterday_through_midnight_today() {
 
 #[test]
 fn very_specific_through_very_specific() {
-    let d1 = NaiveDate::from_ymd(2014, 10, 6).and_hms(8, 57, 29);
-    let d2 = NaiveDate::from_ymd(2020, 3, 6).and_hms(17, 28, 34);
+    let d1 = Date::from_calendar_date(2014, Month::October, 6).unwrap().with_hms(8, 57, 29).unwrap();
+    let d2 = Date::from_calendar_date(2020, Month::March, 6).unwrap().with_hms(17, 28, 34).unwrap();
     let (start, end, _) = parse("2014-10-06 08:57:29 - 2020-03-06 17:28:33", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -983,8 +987,8 @@ fn very_specific_through_very_specific() {
 
 #[test]
 fn very_specific_up_to_very_specific() {
-    let d1 = NaiveDate::from_ymd(2014, 10, 6).and_hms(8, 57, 29);
-    let d2 = NaiveDate::from_ymd(2020, 3, 6).and_hms(17, 28, 33);
+    let d1 = Date::from_calendar_date(2014, Month::October, 6).unwrap().with_hms(8, 57, 29).unwrap();
+    let d2 = Date::from_calendar_date(2020, Month::March, 6).unwrap().with_hms(17, 28, 33).unwrap();
     let (start, end, _) = parse("2014-10-06 08:57:29 up to 2020-03-06 17:28:33", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -992,8 +996,8 @@ fn very_specific_up_to_very_specific() {
 
 #[test]
 fn somewhat_specific_through_somewhat_specific() {
-    let d1 = NaiveDate::from_ymd(2014, 10, 6).and_hms(8, 57, 00);
-    let d2 = NaiveDate::from_ymd(2020, 3, 6).and_hms(17, 28, 01);
+    let d1 = Date::from_calendar_date(2014, Month::October, 6).unwrap().with_hms(8, 57, 00).unwrap();
+    let d2 = Date::from_calendar_date(2020, Month::March, 6).unwrap().with_hms(17, 28, 01).unwrap();
     let (start, end, _) = parse("2014-10-06 08:57 - 2020-03-06 17:28", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1001,8 +1005,8 @@ fn somewhat_specific_through_somewhat_specific() {
 
 #[test]
 fn somewhat_specific_up_to_somewhat_specific() {
-    let d1 = NaiveDate::from_ymd(2014, 10, 6).and_hms(8, 57, 00);
-    let d2 = NaiveDate::from_ymd(2020, 3, 6).and_hms(17, 28, 00);
+    let d1 = Date::from_calendar_date(2014, Month::October, 6).unwrap().with_hms(8, 57, 00).unwrap();
+    let d2 = Date::from_calendar_date(2020, Month::March, 6).unwrap().with_hms(17, 28, 00).unwrap();
     let (start, end, _) = parse("2014-10-06 08:57 up to 2020-03-06 17:28", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1010,7 +1014,7 @@ fn somewhat_specific_up_to_somewhat_specific() {
 
 #[test]
 fn april_3_25_bc() {
-    let d1 = NaiveDate::from_ymd(-24, 4, 3).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(-24, Month::April, 3).unwrap().midnight();
     let d2 = d1 + Duration::days(1);
     let (start, end, _) = parse("April 3, 25 BC", None).unwrap();
     assert_eq!(d1, start);
@@ -1019,7 +1023,7 @@ fn april_3_25_bc() {
 
 #[test]
 fn april_3_25_ad() {
-    let d1 = NaiveDate::from_ymd(25, 4, 3).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(25, Month::April, 3).unwrap().midnight();
     let d2 = d1 + Duration::days(1);
     let (start, end, _) = parse("April 3, 25 AD", None).unwrap();
     assert_eq!(d1, start);
@@ -1028,7 +1032,7 @@ fn april_3_25_ad() {
 
 #[test]
 fn april_3_25bc() {
-    let d1 = NaiveDate::from_ymd(-24, 4, 3).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(-24, Month::April, 3).unwrap().midnight();
     let d2 = d1 + Duration::days(1);
     let (start, end, _) = parse("April 3, 25BC", None).unwrap();
     assert_eq!(d1, start);
@@ -1037,7 +1041,7 @@ fn april_3_25bc() {
 
 #[test]
 fn april_3_25ad() {
-    let d1 = NaiveDate::from_ymd(25, 4, 3).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(25, Month::April, 3).unwrap().midnight();
     let d2 = d1 + Duration::days(1);
     let (start, end, _) = parse("April 3, 25AD", None).unwrap();
     assert_eq!(d1, start);
@@ -1046,9 +1050,9 @@ fn april_3_25ad() {
 
 #[test]
 fn this_weekend() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
     let (start, end, _) = parse("this weekend", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1056,9 +1060,9 @@ fn this_weekend() {
 
 #[test]
 fn last_weekend() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 3).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 3).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
     let (start, end, _) = parse("last weekend", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1066,9 +1070,9 @@ fn last_weekend() {
 
 #[test]
 fn next_weekend() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 19).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 17).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 19).unwrap().midnight();
     let (start, end, _) = parse("next weekend", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1076,9 +1080,9 @@ fn next_weekend() {
 
 #[test]
 fn this_weekend_on_saturday() {
-    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
     let (start, end, _) = parse("this weekend", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1086,9 +1090,9 @@ fn this_weekend_on_saturday() {
 
 #[test]
 fn last_weekend_on_saturday() {
-    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 3).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 3).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
     let (start, end, _) = parse("last weekend", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1096,9 +1100,9 @@ fn last_weekend_on_saturday() {
 
 #[test]
 fn next_weekend_on_saturday() {
-    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 19).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 17).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 19).unwrap().midnight();
     let (start, end, _) = parse("next weekend", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1106,9 +1110,9 @@ fn next_weekend_on_saturday() {
 
 #[test]
 fn this_weekend_on_sunday() {
-    let now = NaiveDate::from_ymd(1969, 5, 11).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 11).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
     let (start, end, _) = parse("this weekend", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1116,9 +1120,9 @@ fn this_weekend_on_sunday() {
 
 #[test]
 fn last_weekend_on_sunday() {
-    let now = NaiveDate::from_ymd(1969, 5, 11).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 3).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 11).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 3).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
     let (start, end, _) = parse("last weekend", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1126,9 +1130,9 @@ fn last_weekend_on_sunday() {
 
 #[test]
 fn next_weekend_on_sunday() {
-    let now = NaiveDate::from_ymd(1969, 5, 11).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 19).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 11).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 17).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 19).unwrap().midnight();
     let (start, end, _) = parse("next weekend", Some(Config::new().now(now))).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1136,9 +1140,9 @@ fn next_weekend_on_sunday() {
 
 #[test]
 fn this_weekend_on_sunday_when_sunday_starts_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 11).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 11).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
     let (start, end, _) = parse(
         "this weekend",
         Some(Config::new().now(now).monday_starts_week(false)),
@@ -1150,9 +1154,9 @@ fn this_weekend_on_sunday_when_sunday_starts_week() {
 
 #[test]
 fn last_weekend_on_sunday_when_sunday_starts_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 11).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 3).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 11).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 3).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
     let (start, end, _) = parse(
         "last weekend",
         Some(Config::new().now(now).monday_starts_week(false)),
@@ -1164,9 +1168,9 @@ fn last_weekend_on_sunday_when_sunday_starts_week() {
 
 #[test]
 fn next_weekend_on_sunday_when_sunday_starts_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 11).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 19).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 11).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 17).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 19).unwrap().midnight();
     let (start, end, _) = parse(
         "next weekend",
         Some(Config::new().now(now).monday_starts_week(false)),
@@ -1178,9 +1182,9 @@ fn next_weekend_on_sunday_when_sunday_starts_week() {
 
 #[test]
 fn this_weekend_on_saturday_when_sunday_starts_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 12).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 12).unwrap().midnight();
     let (start, end, _) = parse(
         "this weekend",
         Some(Config::new().now(now).monday_starts_week(false)),
@@ -1192,9 +1196,9 @@ fn this_weekend_on_saturday_when_sunday_starts_week() {
 
 #[test]
 fn last_weekend_on_saturday_when_sunday_starts_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 3).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 5).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 3).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 5).unwrap().midnight();
     let (start, end, _) = parse(
         "last weekend",
         Some(Config::new().now(now).monday_starts_week(false)),
@@ -1206,9 +1210,9 @@ fn last_weekend_on_saturday_when_sunday_starts_week() {
 
 #[test]
 fn next_weekend_on_saturday_when_sunday_starts_week() {
-    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 17).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(1969, 5, 19).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 17).unwrap().midnight();
+    let d2 = Date::from_calendar_date(1969, Month::May, 19).unwrap().midnight();
     let (start, end, _) = parse(
         "next weekend",
         Some(Config::new().now(now).monday_starts_week(false)),
@@ -1220,7 +1224,7 @@ fn next_weekend_on_saturday_when_sunday_starts_week() {
 
 #[test]
 fn regression_12pm() {
-    let d1 = NaiveDate::from_ymd(2018, 5, 21).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(2018, Month::May, 21).unwrap().midnight();
     let d2 = d1 + Duration::seconds(1);
     if let Ok((start, end, _)) = parse("12 pm on May 21, 2018", None) {
         assert_eq!(d1, start);
@@ -1232,8 +1236,8 @@ fn regression_12pm() {
 
 #[test]
 fn year_2000() {
-    let d1 = NaiveDate::from_ymd(2000, 1, 1).and_hms(0, 0, 0);
-    let d2 = NaiveDate::from_ymd(2001, 1, 1).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(2000, Month::January, 1).unwrap().midnight();
+    let d2 = Date::from_calendar_date(2001, Month::January, 1).unwrap().midnight();
     if let Ok((start, end, _)) = parse("2000", None) {
         assert_eq!(d1, start);
         assert_eq!(d2, end);
@@ -1277,7 +1281,7 @@ fn ordinals() {
         (30, "30th", "thirtieth", "Tuesday"),
         (31, "31st", "thirty-first", "Wednesday"),
     ];
-    let base_date = NaiveDate::from_ymd(2018, 1, 1).and_hms(0, 0, 0);
+    let base_date = Date::from_calendar_date(2018, Month::January, 1).unwrap().midnight();
     for (cardinal, abbv, ordinal, weekday) in patterns.iter() {
         let d1 = base_date + Duration::days(*cardinal as i64 - 1);
         let d2 = d1 + Duration::days(1);
@@ -1322,14 +1326,14 @@ fn kalends_nones_ids() {
         "November",
         "December",
     ];
-    for (i, m) in months.iter().enumerate() {
-        let i = (i + 1) as u32;
+    let mut i = Month::January;
+    for m in months.iter() {
         let big_month = match i {
-            3 | 5 | 7 | 10 => true,
+            Month::March | Month::May | Month::July | Month::October => true,
             _ => false,
         };
         // kalends
-        let d1 = NaiveDate::from_ymd(2018, i, 1).and_hms(0, 0, 0);
+        let d1 = Date::from_calendar_date(2018, i, 1).unwrap().midnight();
         let d2 = d1 + Duration::days(1);
         let p = format!("the kalends of {} 2018", m);
         match parse(&p, None) {
@@ -1343,7 +1347,7 @@ fn kalends_nones_ids() {
             }
         }
         // nones
-        let d1 = NaiveDate::from_ymd(2018, i, if big_month { 7 } else { 5 }).and_hms(0, 0, 0);
+        let d1 = Date::from_calendar_date(2018, i, if big_month { 7 } else { 5 }).unwrap().midnight();
         let d2 = d1 + Duration::days(1);
         let p = format!("the nones of {} 2018", m);
         match parse(&p, None) {
@@ -1357,7 +1361,7 @@ fn kalends_nones_ids() {
             }
         }
         // ides
-        let d1 = NaiveDate::from_ymd(2018, i, if big_month { 15 } else { 13 }).and_hms(0, 0, 0);
+        let d1 = Date::from_calendar_date(2018, i, if big_month { 15 } else { 13 }).unwrap().midnight();
         let d2 = d1 + Duration::days(1);
         let p = format!("the ides of {} 2018", m);
         match parse(&p, None) {
@@ -1370,13 +1374,14 @@ fn kalends_nones_ids() {
                 assert!(false, "didn't match");
             }
         }
+        i = i.next();
     }
 }
 
 #[test]
 fn day_and_month() {
-    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 15).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 15).unwrap().midnight();
     let d2 = d1 + Duration::days(1);
     let patterns = [
         "the ides of May",
@@ -1402,8 +1407,8 @@ fn day_and_month() {
 
 #[test]
 fn day_and_month_default_to_future() {
-    let now = NaiveDate::from_ymd(1969, 6, 16).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1970, 5, 15).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::June, 16).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1970, Month::May, 15).unwrap().midnight();
     let d2 = d1 + Duration::days(1);
     let patterns = [
         "the ides of May",
@@ -1428,7 +1433,7 @@ fn day_and_month_default_to_future() {
 
 #[test]
 fn one_week_before_may_6_1969() {
-    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0) - Duration::days(7);
+    let d1 = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight() - Duration::days(7);
     let patterns = ["one week before May 6, 1969", "1 week before May 6, 1969"];
     for p in patterns.iter() {
         match parse(p, None) {
@@ -1446,7 +1451,7 @@ fn one_week_before_may_6_1969() {
 
 #[test]
 fn one_week_after_may_6_1969() {
-    let d1 = NaiveDate::from_ymd(1969, 5, 7).and_hms(0, 0, 0) + Duration::days(7);
+    let d1 = Date::from_calendar_date(1969, Month::May, 7).unwrap().midnight() + Duration::days(7);
     let patterns = ["one week after May 6, 1969", "1 week after May 6, 1969"];
     for p in patterns.iter() {
         match parse(p, None) {
@@ -1464,7 +1469,7 @@ fn one_week_after_may_6_1969() {
 
 #[test]
 fn one_week_before_and_after_may_6_1969() {
-    let d = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let d = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     let d1 = d - Duration::days(7);
     let d2 = d + Duration::days(7);
     let patterns = [
@@ -1487,7 +1492,7 @@ fn one_week_before_and_after_may_6_1969() {
 
 #[test]
 fn one_week_around_may_6_1969() {
-    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0)
+    let d1 = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight()
         - Duration::milliseconds(7 * 24 * 60 * 60 * 1000 / 2);
     let d2 = d1 + Duration::days(7);
     let patterns = ["one week around May 6, 1969", "1 week around May 6, 1969"];
@@ -1507,7 +1512,7 @@ fn one_week_around_may_6_1969() {
 
 #[test]
 fn number_before_test() {
-    let d = NaiveDate::from_ymd(1969, 5, 6).and_hms(13, 0, 0);
+    let d = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(13, 0, 0).unwrap();
     let nums = [
         "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
     ];
@@ -1529,7 +1534,7 @@ fn number_before_test() {
 
 #[test]
 fn noon() {
-    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(12, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(12, 0, 0).unwrap();
     let d2 = d1 + Duration::seconds(1);
     match parse("noon on May 6, 1969", None) {
         Ok((start, end, _)) => {
@@ -1541,7 +1546,7 @@ fn noon() {
             assert!(false, "didn't match");
         }
     }
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
     match parse("noon on May 6, 1969", Some(Config::new().now(now))) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1556,8 +1561,8 @@ fn noon() {
 
 #[test]
 fn simple_noon_past_and_future() {
-    let now = NaiveDate::from_ymd(1969, 5, 6).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 5, 5).and_hms(12, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 6).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::May, 5).unwrap().with_hms(12, 0, 0).unwrap();
     let d2 = d1 + Duration::seconds(1);
     match parse("noon", Some(Config::new().now(now))) {
         Ok((start, end, _)) => {
@@ -1585,7 +1590,7 @@ fn simple_noon_past_and_future() {
 
 #[test]
 fn midnight() {
-    let d1 = NaiveDate::from_ymd(1969, 5, 7).and_hms(0, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::May, 7).unwrap().midnight();
     let d2 = d1 + Duration::seconds(1);
     match parse("midnight on May 6, 1969", None) {
         Ok((start, end, _)) => {
@@ -1617,7 +1622,7 @@ fn displacement() {
         ("minute", Period::Minute),
         ("second", Period::Second),
     ];
-    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
     for (phrase, period) in displacements.iter() {
         for n in [1, 2, 3].iter() {
             let phrase = if *n == 1 {
@@ -1664,8 +1669,8 @@ fn displacement() {
 
 #[test]
 fn friday_the_13th() {
-    let now = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1968, 12, 13).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1968, Month::December, 13).unwrap().midnight();
     match parse("Friday the 13th", Some(Config::new().now(now))) {
         Ok((start, _, _)) => {
             assert_eq!(d1, start);
@@ -1679,8 +1684,8 @@ fn friday_the_13th() {
 
 #[test]
 fn the_31st() {
-    let now = NaiveDate::from_ymd(1969, 4, 10).and_hms(0, 0, 0);
-    let d1 = NaiveDate::from_ymd(1969, 3, 31).and_hms(0, 0, 0);
+    let now = Date::from_calendar_date(1969, Month::April, 10).unwrap().midnight();
+    let d1 = Date::from_calendar_date(1969, Month::March, 31).unwrap().midnight();
     match parse("the 31st", Some(Config::new().now(now))) {
         Ok((start, _, _)) => {
             assert_eq!(d1, start);
@@ -1694,7 +1699,7 @@ fn the_31st() {
 
 #[test]
 fn specific_time() {
-    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(12, 3, 5);
+    let d1 = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(12, 3, 5).unwrap();
     let d2 = d1 + Duration::seconds(1);
     match parse("1969-05-06 12:03:05", None) {
         Ok((start, end, _)) => {
@@ -1710,7 +1715,7 @@ fn specific_time() {
 
 #[test]
 fn no_space_before_pm() {
-    let d1 = NaiveDate::from_ymd(1969, 5, 6).and_hms(13, 0, 0);
+    let d1 = Date::from_calendar_date(1969, Month::May, 6).unwrap().with_hms(13, 0, 0).unwrap();
     let d2 = d1 + Duration::seconds(1);
     match parse("1969-05-06 at 1PM", None) {
         Ok((start, end, _)) => {
@@ -1752,7 +1757,7 @@ fn relative_time_regression() {
 
 #[test]
 fn since_yesterday() {
-    let then = NaiveDate::from_ymd(1969, 5, 10).and_hms(0, 0, 0);
+    let then = Date::from_calendar_date(1969, Month::May, 10).unwrap().midnight();
     let now = then + Duration::hours(5);
     match parse("since yesterday", Some(Config::new().now(now))) {
         Ok((start, end, two_times)) => {
@@ -1769,7 +1774,7 @@ fn since_yesterday() {
 
 #[test]
 fn since_noon() {
-    let then = NaiveDate::from_ymd(1969, 5, 10).and_hms(12, 0, 0);
+    let then = Date::from_calendar_date(1969, Month::May, 10).unwrap().with_hms(12, 0, 0).unwrap();
     let now = then + Duration::hours(5);
     for expr in &[
         "since noon",
@@ -1796,7 +1801,7 @@ fn since_noon() {
 
 #[test]
 fn since_may() {
-    let then = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let then = Date::from_calendar_date(1969, Month::May, 1).unwrap().midnight();
     let now = then + Duration::hours(5);
     for expr in &[
         "since may",
@@ -1822,7 +1827,7 @@ fn since_may() {
 
 #[test]
 fn since_the_end_of_may_misordered() {
-    let then = NaiveDate::from_ymd(1969, 5, 1).and_hms(0, 0, 0);
+    let then = Date::from_calendar_date(1969, Month::May, 1).unwrap().midnight();
     let now = then + Duration::hours(5);
     for expr in &["since the end of may", "after the end of may"] {
         match parse(expr, Some(Config::new().now(now))) {
