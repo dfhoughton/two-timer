@@ -927,7 +927,7 @@ fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDa
 /// println!("{}", first_moment()); // -262144-01-01 00:00:00
 /// ```
 pub fn first_moment() -> NaiveDateTime {
-    chrono::naive::MIN_DATE.and_hms_milli(0, 0, 0, 0)
+    NaiveDate::MIN.and_hms_milli_opt(0, 0, 0, 0).unwrap()
 }
 
 /// The moment regarded as the end of time.
@@ -940,7 +940,7 @@ pub fn first_moment() -> NaiveDateTime {
 /// println!("{}", last_moment()); // +262143-12-31 23:59:59.999
 /// ```
 pub fn last_moment() -> NaiveDateTime {
-    chrono::naive::MAX_DATE.and_hms_milli(23, 59, 59, 999)
+    NaiveDate::MAX.and_hms_milli_opt(23, 59, 59, 999).unwrap()
 }
 
 fn specific(m: &Match) -> bool {
@@ -1004,7 +1004,7 @@ fn handle_specific_day(
             return match n_date(date, config) {
                 Err(s) => Err(s),
                 Ok(d1) => {
-                    let d1 = d1.and_hms(0, 0, 0);
+                    let d1 = d1.and_hms_opt(0, 0, 0).unwrap();
                     Ok(moment_and_time(
                         &Config::new().now(d1).period(Period::Day),
                         time,
@@ -1030,7 +1030,7 @@ fn handle_specific_day(
                     if let Some(wd) = date.name("a_day") {
                         let wd = weekday(wd.as_str());
                         if wd == d1.weekday() {
-                            let d1 = d1.and_hms(0, 0, 0);
+                            let d1 = d1.and_hms_opt(0, 0, 0).unwrap();
                             Ok(moment_and_time(
                                 &Config::new().now(d1).period(Period::Day),
                                 time,
@@ -1045,7 +1045,7 @@ fn handle_specific_day(
                             )))
                         }
                     } else {
-                        let d1 = d1.and_hms(0, 0, 0);
+                        let d1 = d1.and_hms_opt(0, 0, 0).unwrap();
                         Ok(moment_and_time(
                             &Config::new().now(d1).period(Period::Day),
                             time,
@@ -1104,7 +1104,7 @@ fn handle_specific_period(
         return match NaiveDate::from_ymd_opt(y, m, 1) {
             None => unreachable!(),
             Some(d1) => {
-                let d1 = d1.and_hms(0, 0, 0);
+                let d1 = d1.and_hms_opt(0, 0, 0).unwrap();
                 Ok(moment_and_time(
                     &Config::new().now(d1).period(Period::Month),
                     None,
@@ -1134,7 +1134,11 @@ fn handle_specific_period(
                 PeriodModifier::Last => d - Duration::days(7),
                 PeriodModifier::This => d,
             };
-            return Ok(moment_to_period(d.and_hms(0, 0, 0), &Period::Day, config));
+            return Ok(moment_to_period(
+                d.and_hms_opt(0, 0, 0).unwrap(),
+                &Period::Day,
+                config,
+            ));
         }
         return match ModifiablePeriod::from_match(moment.name("modifiable_period").unwrap()) {
             ModifiablePeriod::Week => {
@@ -1207,7 +1211,7 @@ fn handle_specific_period(
     if let Some(moment) = moment.name("year") {
         let year = year(moment, config);
         return Ok(moment_to_period(
-            NaiveDate::from_ymd(year, 1, 1).and_hms(0, 0, 0),
+            first_moment_of_day(year, 1, 1),
             &Period::Year,
             config,
         ));
@@ -1271,14 +1275,7 @@ fn handle_specific_time(
             Err(s) => Err(s),
             Ok(d) => {
                 let (hour, minute, second, _) = time(moment);
-                let m = d
-                    .and_hms(0, 0, 0)
-                    .with_hour(hour)
-                    .unwrap()
-                    .with_minute(minute)
-                    .unwrap()
-                    .with_second(second)
-                    .unwrap();
+                let m = d.and_hms_opt(hour, minute, second).unwrap();
                 Ok(moment_to_period(m, &Period::Second, config))
             }
         };
@@ -1339,7 +1336,9 @@ fn relative_moment(
     if let Some(a_month_and_a_day) = m.name("a_day_in_month") {
         return match month_and_a_day(a_month_and_a_day, config, other_time, before) {
             Ok(d) => Ok(moment_and_time(
-                &config.now(d.and_hms(0, 0, 0)).period(Period::Day),
+                &config
+                    .now(d.and_hms_opt(0, 0, 0).unwrap())
+                    .period(Period::Day),
                 m.name("time"),
             )),
             Err(e) => Err(e),
@@ -1357,7 +1356,9 @@ fn relative_moment(
             d = d + Duration::days(7);
         }
         return Ok(moment_and_time(
-            &config.now(d.and_hms(0, 0, 0)).period(Period::Day),
+            &config
+                .now(d.and_hms_opt(0, 0, 0).unwrap())
+                .period(Period::Day),
             m.name("time"),
         ));
     }
@@ -1395,7 +1396,7 @@ fn relative_moment(
                 other_time.year()
             }
         };
-        let d = NaiveDate::from_ymd(year, month, 1).and_hms(0, 0, 0);
+        let d = first_moment_of_day(year, month, 1);
         let (d1, d2) = moment_to_period(d, &Period::Month, config);
         if before && d1 >= *other_time {
             return Ok(moment_to_period(
@@ -1759,18 +1760,17 @@ fn moment_to_period(
 ) -> (NaiveDateTime, NaiveDateTime) {
     match period {
         Period::Year => {
-            let d1 = NaiveDate::from_ymd(now.year(), 1, 1).and_hms(0, 0, 0);
-            let d2 = NaiveDate::from_ymd(now.year() + 1, 1, 1).and_hms(0, 0, 0);
+            let d1 = first_moment_of_day(now.year(), 1, 1);
+            let d2 = first_moment_of_day(now.year() + 1, 1, 1);
             (d1, d2)
         }
         Period::Month => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), 1).and_hms(0, 0, 0);
+            let d1 = first_moment_of_day(now.year(), now.month(), 1);
             let d2 = if now.month() == 12 {
-                NaiveDate::from_ymd(now.year() + 1, 1, 1)
+                first_moment_of_day(now.year() + 1, 1, 1)
             } else {
-                NaiveDate::from_ymd(now.year(), now.month() + 1, 1)
-            }
-            .and_hms(0, 0, 0);
+                first_moment_of_day(now.year(), now.month() + 1, 1)
+            };
             (d1, d2)
         }
         Period::Week => {
@@ -1779,21 +1779,23 @@ fn moment_to_period(
             } else {
                 now.weekday().num_days_from_sunday()
             };
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0)
+            let d1 = first_moment_of_day(now.year(), now.month(), now.day())
                 - Duration::days(offset as i64);
             (d1, d1 + Duration::days(7))
         }
         Period::Day => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(0, 0, 0);
+            let d1 = first_moment_of_day(now.year(), now.month(), now.day());
             (d1, d1 + Duration::days(1))
         }
         Period::Hour => {
-            let d1 =
-                NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(now.hour(), 0, 0);
+            let d1 = precise_moment(now.year(), now.month(), now.day(), now.hour(), 0, 0);
             (d1, d1 + Duration::hours(1))
         }
         Period::Minute => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(
+            let d1 = precise_moment(
+                now.year(),
+                now.month(),
+                now.day(),
                 now.hour(),
                 now.minute(),
                 0,
@@ -1801,7 +1803,10 @@ fn moment_to_period(
             (d1, d1 + Duration::minutes(1))
         }
         Period::Second => {
-            let d1 = NaiveDate::from_ymd(now.year(), now.month(), now.day()).and_hms(
+            let d1 = precise_moment(
+                now.year(),
+                now.month(),
+                now.day(),
                 now.hour(),
                 now.minute(),
                 now.second(),
@@ -1817,7 +1822,9 @@ fn moment_to_period(
                 if offset < 0 {
                     offset += config.pay_period_length as i64;
                 }
-                let d1 = (now.date() - Duration::days(offset)).and_hms(0, 0, 0);
+                let d1 = (now.date() - Duration::days(offset))
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap();
                 (d1, d1 + Duration::days(config.pay_period_length as i64))
             } else {
                 unreachable!()
@@ -1944,4 +1951,25 @@ fn count(m: &Match) -> u32 {
     } else {
         s.parse::<u32>().unwrap()
     }
+}
+
+fn first_moment_of_day(year: i32, month: u32, day: u32) -> NaiveDateTime {
+    NaiveDate::from_ymd_opt(year, month, day)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+}
+
+fn precise_moment(
+    year: i32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    second: u32,
+) -> NaiveDateTime {
+    NaiveDate::from_ymd_opt(year, month, day)
+        .unwrap()
+        .and_hms_opt(hour, minute, second)
+        .unwrap()
 }
