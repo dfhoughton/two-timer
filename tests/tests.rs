@@ -91,6 +91,16 @@ fn day_5_6_69_at_3_30_pm() {
     }
 }
 
+#[test]fn numeric_months() {
+    for m in (1..=12).into_iter() {
+        let date: String = format!("1969-{}-1", &m);
+        let then = precise_moment(1969, m, 1, 0, 0, 0);
+        let (start, end, _) = parse(&date, None).unwrap();
+        assert_eq!(then, start);
+        assert_eq!(then + Duration::days(1), end);
+    }
+}
+
 #[test]
 fn day_5_6_69_at_3_pm() {
     let then = precise_moment(1969, 5, 6, 15, 0, 0);
