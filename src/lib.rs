@@ -460,7 +460,7 @@ lazy_static! {
                     .collect::<Vec<_>>()
             ]
         n_month => [
-                (1..12)
+                (1..=12)
                     .into_iter()
                     .flat_map(|i| vec![format!("{:02}", i), format!("{}", i)])
                     .collect::<Vec<_>>()
