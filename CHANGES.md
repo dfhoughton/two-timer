@@ -1,6 +1,6 @@
 # Change Log
 
-## 2.2.5
+## 2.2.5 *2023-10-9*
 * merged fix by @Paradyx for Numeral dates with december fail to parse #8
 ## 2.2.4 *2023-1-20*
 * made cargo-audit happy
