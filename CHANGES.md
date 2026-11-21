@@ -1,5 +1,19 @@
 # Change Log
 
+## 2.3.0 *2026-11-21*
+* moved to edition 2021 and declared an MSRV (`rust-version = "1.65"`)
+* removed the direct `regex` dependency -- the two regexes used for extracting numbers from matches
+are replaced with plain string parsing, which is both faster and cheaper to compile
+* `serde_json` is now an optional dependency, required only by the `serializer` binary
+(enable it with `--features serializer`), so library users no longer compile it
+* bumped `chrono` to the latest 0.4.x and switched internally from the deprecated `chrono::Duration`
+to `chrono::TimeDelta`
+* internal cleanup: removed `extern crate` declarations, replaced nested `match`-on-`Result` boilerplate
+with `?`, removed `clone()` on `Copy` types, added `impl Default for Config`, fixed all clippy warnings
+* performance: interpreting a specific day (e.g. "5/6/69") no longer reads the system clock an extra
+time per call
+* bug fix: parsing "R" (the single-letter abbreviation for Thursday) no longer panics
+
 ## 2.2.5 *2023-10-9*
 * merged fix by @Paradyx for Numeral dates with december fail to parse #8
 ## 2.2.4 *2023-1-20*

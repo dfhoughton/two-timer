@@ -13,13 +13,10 @@ separated by a preposition such as "to", "through", "up to", or "until".
 # Example
 
 ```rust
-extern crate two_timer;
 use two_timer::{parse, Config};
-extern crate chrono;
 use chrono::naive::NaiveDate;
 
-pub fn main() {
-    let phrases = [
+let phrases = [
         "now",
         "this year",
         "last Friday",
@@ -53,7 +50,6 @@ pub fn main() {
             Err(e) => println!("{:?}", e),
         }
     }
-}
 ```
 produces
 ```text
@@ -98,11 +94,11 @@ are
 
 1. a fully-specified expression in a pair will provide the context for the other expression
 2. a relative expression will be interpreted as appropriate given its order -- the second expression
-describes a time after the first
+   describes a time after the first
 3. if neither expression is fully-specified, the first will be interpreted relative to "now" and the
-second relative to the first
+   second relative to the first
 4. a moment interpreted relative to "now" will be assumed to be before now unless the configuration
-parameter `default_to_past` is set to `false`, in which case it will be assumed to be after now
+   parameter `default_to_past` is set to `false`, in which case it will be assumed to be after now
 
 The rules of interpretation for relative time expressions in ranges will likely be refined further
 in the future.
@@ -158,7 +154,6 @@ optional argument, a `Config` object, whose chief function outside of testing is
 for example, you could do this:
 
 ```rust
-# extern crate two_timer;
 # use two_timer::{parse, Config};
 let (reference_time, _, _) = parse("5/6/69", None).unwrap();
 let config = Config::new().pay_period_start(Some(reference_time.date()));
@@ -191,7 +186,7 @@ slower than the Perl version. To address this I added an optional feature to two
 
 ```toml
 [dependencies.two_timer]
-version = "~2.2"
+version = "~2.3"
 features = ["small_grammar"]
 ```
 
@@ -215,21 +210,14 @@ only the typical expressions used with JobLog, falling back on the full grammar 
    * now
    * today
    * yesterday
-});
 
 */
 
 #![recursion_limit = "1024"]
-#[macro_use]
-extern crate pidgin;
-#[macro_use]
-extern crate lazy_static;
-extern crate chrono;
-extern crate serde_json;
 use chrono::naive::{NaiveDate, NaiveDateTime};
-use chrono::{Datelike, Duration, Local, Timelike, Weekday};
-use pidgin::{Grammar, Match, Matcher};
-use regex::Regex;
+use chrono::{Datelike, Local, TimeDelta, Timelike, Weekday};
+use lazy_static::lazy_static;
+use pidgin::{grammar, Grammar, Match, Matcher};
 
 lazy_static! {
     // making this public is useful for testing, but best to keep it hidden to
@@ -353,9 +341,9 @@ lazy_static! {
         displacement    => [["week", "day", "hour", "minute", "second"]] ("s")?   // not handling variable-width periods like months or years
         end             => ("end")
         from_now_or_ago => [["from now", "ago"]]
-        h12             => (?-B) [(1..=12).into_iter().collect::<Vec<_>>()]
-        h24             => [(1..=24).into_iter().flat_map(|i| vec![format!("{}", i), format!("{:02}", i)]).collect::<Vec<_>>()]
-        minute          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
+        h12             => (?-B) [(1..=12).collect::<Vec<_>>()]
+        h24             => [(1..=24).flat_map(|i| vec![i.to_string(), format!("{:02}", i)]).collect::<Vec<_>>()]
+        minute          => (?-B) [ (0..60).map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
         modifier        => [["the", "this", "last", "next"]]
         named_time      => [["noon", "midnight"]]
         n_year          => r(r"\b(?:[1-9][0-9]{0,4}|0)\b")
@@ -364,7 +352,7 @@ lazy_static! {
         unit            => [["week", "day", "hour", "minute", "second"]] ("s")?
         universal       => [["always", "ever", "all time", "forever", "from beginning to end", "from the beginning to the end"]]
         up_to           => [["to", "until", "up to", "till"]]
-        second          => (?-B) [ (0..60).into_iter().map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
+        second          => (?-B) [ (0..60).map(|i| format!("{:02}", i)).collect::<Vec<_>>() ]
         suffix_year     => r(r"\b[1-9][0-9]{0,4}")
         through         => [["up through", "through", "thru"]] | r("-+")
 
@@ -372,7 +360,6 @@ lazy_static! {
         a_day => [
                 "Sunday Monday Tuesday Wednesday Thursday Friday Saturday Tues Weds Thurs Tues. Weds. Thurs."
                     .split(" ")
-                    .into_iter()
                     .flat_map(|w| vec![
                         w.to_string(),
                         w[0..2].to_string(),
@@ -385,7 +372,6 @@ lazy_static! {
         a_month => [
                 "January February March April May June July August September October November December"
                      .split(" ")
-                     .into_iter()
                      .flat_map(|w| vec![w.to_string(), w[0..3].to_string()])
                      .collect::<Vec<_>>()
             ]
@@ -455,14 +441,12 @@ lazy_static! {
             ]]
         n_day => [
                 (1..=31)
-                    .into_iter()
                     .flat_map(|i| vec![i.to_string(), format!("{:02}", i)])
                     .collect::<Vec<_>>()
             ]
         n_month => [
                 (1..=12)
-                    .into_iter()
-                    .flat_map(|i| vec![format!("{:02}", i), format!("{}", i)])
+                    .flat_map(|i| vec![format!("{:02}", i), i.to_string()])
                     .collect::<Vec<_>>()
             ]
         n_ordinal => [[
@@ -500,7 +484,6 @@ lazy_static! {
             ]]
         short_year => [
                 (0..=99)
-                    .into_iter()
                     .flat_map(|i| vec![format!("'{:02}", i), format!("{:02}", i)])
                     .collect::<Vec<_>>()
             ]
@@ -563,7 +546,6 @@ lazy_static! {
         a_day => [
                 "Sunday Monday Tuesday Wednesday Thursday Friday Saturday Tues Weds Thurs Tues. Weds. Thurs."
                     .split(" ")
-                    .into_iter()
                     .flat_map(|w| vec![
                         w.to_string(),
                         w[0..2].to_string(),
@@ -576,7 +558,6 @@ lazy_static! {
         a_month => [
                 "January February March April May June July August September October November December"
                      .split(" ")
-                     .into_iter()
                      .flat_map(|w| vec![w.to_string(), w[0..3].to_string()])
                      .collect::<Vec<_>>()
             ]
@@ -595,7 +576,6 @@ lazy_static! {
 /// # Examples
 ///
 /// ```rust
-/// # extern crate two_timer;
 /// # use two_timer::{parsable};
 /// let copacetic = parsable("5/6/69");
 /// ```
@@ -616,7 +596,6 @@ pub fn parsable(phrase: &str) -> bool {
 /// # Examples
 ///
 /// ```rust
-/// # extern crate two_timer;
 /// # use two_timer::{parse, Config};
 /// let (reference_time, _, _) = parse("5/6/69", None).unwrap();
 /// ```
@@ -631,159 +610,104 @@ pub fn parse(
     } else {
         MATCHER.parse(phrase)
     };
-    if parse.is_none() {
+    let Some(parse) = parse else {
         return Err(TimeError::Parse(format!(
             "could not parse \"{}\" as a time expression",
             phrase
         )));
-    }
-    let parse = parse.unwrap();
+    };
     if parse.has("universal") {
         return Ok((first_moment(), last_moment(), false));
     }
-    let parse = parse.name("particular").unwrap();
-    let config = config.unwrap_or(Config::new());
+    let parse = parse.name("particular").expect("grammar guarantees this");
+    let config = config.unwrap_or_default();
     if let Some(moment) = parse.name("one_time") {
-        return match handle_one_time(moment, &config) {
-            Err(e) => Err(e),
-            Ok((d1, d2, b)) => {
-                let (d3, d4) = adjust(d1, d2, moment);
-                if d1 == d3 {
-                    Ok((d1, d2, b))
-                } else {
-                    Ok((d3, d4, b))
-                }
-            }
-        };
+        let (d1, d2, b) = handle_one_time(moment, &config)?;
+        let (d3, d4) = adjust(d1, d2, moment);
+        return Ok(if d1 == d3 { (d1, d2, b) } else { (d3, d4, b) });
     }
     if let Some(two_times) = parse.name("two_times") {
-        let mut inclusive = two_times.has("beginning");
-        let exclusive = !inclusive && two_times.has("end"); // note this is *explicitly* exclusive
-        if !(inclusive || exclusive) && (two_times.has("time") || two_times.has("precise_time")) {
-            // treating "since noon" as including 12:00:00 and "since 2am" as including 14:00:00
-            inclusive = true;
-        }
-        if let Some(previous_time) = two_times.name("since_time") {
-            if specific(previous_time) {
-                return match specific_moment(previous_time, &config) {
-                    Ok((d1, d2)) => {
-                        let t = if inclusive { d1 } else { d2 };
-                        // if *implicitly* exclusive and we find things misordered, we become inclusive
-                        let t = if !(inclusive || exclusive) && t > config.now {
-                            d1
-                        } else {
-                            t
-                        };
-                        if t > config.now {
-                            Err(TimeError::Misordered(format!(
-                                "the inferred times, {} and {}, are misordered",
-                                t, config.now
-                            )))
-                        } else {
-                            Ok((t, config.now.clone(), false))
-                        }
-                    }
-                    Err(s) => Err(s),
-                };
-            }
-            return match relative_moment(previous_time, &config, &config.now, true) {
-                Ok((d1, d2)) => {
-                    let t = if inclusive { d1 } else { d2 };
-                    let t = if !(inclusive || exclusive) && t > config.now {
-                        d1
-                    } else {
-                        t
-                    };
-                    if t > config.now {
-                        Err(TimeError::Misordered(format!(
-                            "the inferred times, {} and {}, are misordered",
-                            t, config.now
-                        )))
-                    } else {
-                        Ok((t, config.now.clone(), false))
-                    }
-                }
-                Err(s) => Err(s),
-            };
-        }
-        let first = &two_times.children().unwrap()[0];
-        let last = &two_times.children().unwrap()[2];
-        let is_through = two_times.has("through");
-        if specific(first) {
-            if specific(last) {
-                return match specific_moment(first, &config) {
-                    Ok((d1, d2)) => {
-                        let (d1, _) = adjust(d1, d2, first);
-                        match specific_moment(last, &config) {
-                            Ok((d2, d3)) => {
-                                let (d2, d3) = adjust(d2, d3, last);
-                                let d2 = pick_terminus(d2, d3, is_through);
-                                if d1 <= d2 {
-                                    Ok((d1, d2, true))
-                                } else {
-                                    Err(TimeError::Misordered(format!(
-                                        "{} is after {}",
-                                        first.as_str(),
-                                        last.as_str()
-                                    )))
-                                }
-                            }
-                            Err(s) => Err(s),
-                        }
-                    }
-                    Err(s) => Err(s),
-                };
-            } else {
-                return match specific_moment(first, &config) {
-                    Ok((d1, d2)) => {
-                        let (d1, _) = adjust(d1, d2, first);
-                        match relative_moment(last, &config, &d1, false) {
-                            Ok((d2, d3)) => {
-                                let (d2, d3) = adjust(d2, d3, last);
-                                let d2 = pick_terminus(d2, d3, is_through);
-                                Ok((d1, d2, true))
-                            }
-                            Err(s) => Err(s),
-                        }
-                    }
-                    Err(s) => Err(s),
-                };
-            }
-        } else if specific(last) {
-            return match specific_moment(last, &config) {
-                Ok((d2, d3)) => {
-                    let (d2, d3) = adjust(d2, d3, last);
-                    let d2 = pick_terminus(d2, d3, is_through);
-                    match relative_moment(first, &config, &d2, true) {
-                        Ok((d1, d3)) => {
-                            let (d1, _) = adjust(d1, d3, first);
-                            Ok((d1, d2, true))
-                        }
-                        Err(s) => Err(s),
-                    }
-                }
-                Err(s) => Err(s),
-            };
-        } else {
-            // the first moment is assumed to be before now if default_to_past is true, otherwise it is after
-            return match relative_moment(first, &config, &config.now, config.default_to_past) {
-                Ok((d1, d2)) => {
-                    let (d1, _) = adjust(d1, d2, first);
-                    // the second moment is necessarily after the first moment
-                    match relative_moment(last, &config, &d1, false) {
-                        Ok((d2, d3)) => {
-                            let (d2, d3) = adjust(d2, d3, last);
-                            let d2 = pick_terminus(d2, d3, is_through);
-                            Ok((d1, d2, true))
-                        }
-                        Err(s) => Err(s),
-                    }
-                }
-                Err(s) => Err(s),
-            };
-        }
+        return handle_two_times(two_times, &config);
     }
-    unreachable!();
+    unreachable!()
+}
+
+// interprets a `two_times` match, e.g. "from Monday to Friday", "since yesterday", ...
+fn handle_two_times(
+    two_times: &Match,
+    config: &Config,
+) -> Result<(NaiveDateTime, NaiveDateTime, bool), TimeError> {
+    let mut inclusive = two_times.has("beginning");
+    let exclusive = !inclusive && two_times.has("end"); // note this is *explicitly* exclusive
+    if !(inclusive || exclusive) && (two_times.has("time") || two_times.has("precise_time")) {
+        // treating "since noon" as including 12:00:00 and "since 2am" as including 14:00:00
+        inclusive = true;
+    }
+    if let Some(previous_time) = two_times.name("since_time") {
+        let (d1, d2) = if specific(previous_time) {
+            specific_moment(previous_time, config)?
+        } else {
+            relative_moment(previous_time, config, &config.now, true)?
+        };
+        let t = if inclusive { d1 } else { d2 };
+        // if *implicitly* exclusive and we find things misordered, we become inclusive
+        let t = if !(inclusive || exclusive) && t > config.now {
+            d1
+        } else {
+            t
+        };
+        return if t > config.now {
+            Err(TimeError::Misordered(format!(
+                "the inferred times, {} and {}, are misordered",
+                t, config.now
+            )))
+        } else {
+            Ok((t, config.now, false))
+        };
+    }
+    let children = two_times.children().expect("grammar guarantees this");
+    let first = &children[0];
+    let last = &children[2];
+    let is_through = two_times.has("through");
+    if specific(first) {
+        let (d1, d2) = specific_moment(first, config)?;
+        let (d1, _) = adjust(d1, d2, first);
+        if specific(last) {
+            let (d2, d3) = specific_moment(last, config)?;
+            let (d2, d3) = adjust(d2, d3, last);
+            let d2 = pick_terminus(d2, d3, is_through);
+            if d1 <= d2 {
+                Ok((d1, d2, true))
+            } else {
+                Err(TimeError::Misordered(format!(
+                    "{} is after {}",
+                    first.as_str(),
+                    last.as_str()
+                )))
+            }
+        } else {
+            let (d2, d3) = relative_moment(last, config, &d1, false)?;
+            let (d2, d3) = adjust(d2, d3, last);
+            let d2 = pick_terminus(d2, d3, is_through);
+            Ok((d1, d2, true))
+        }
+    } else if specific(last) {
+        let (d2, d3) = specific_moment(last, config)?;
+        let (d2, d3) = adjust(d2, d3, last);
+        let d2 = pick_terminus(d2, d3, is_through);
+        let (d1, d3) = relative_moment(first, config, &d2, true)?;
+        let (d1, _) = adjust(d1, d3, first);
+        Ok((d1, d2, true))
+    } else {
+        // the first moment is assumed to be before now if default_to_past is true, otherwise it is after
+        let (d1, d2) = relative_moment(first, config, &config.now, config.default_to_past)?;
+        let (d1, _) = adjust(d1, d2, first);
+        // the second moment is necessarily after the first moment
+        let (d2, d3) = relative_moment(last, config, &d1, false)?;
+        let (d2, d3) = adjust(d2, d3, last);
+        let d2 = pick_terminus(d2, d3, is_through);
+        Ok((d1, d2, true))
+    }
 }
 
 /// A collection of parameters that can influence the interpretation
@@ -815,6 +739,14 @@ impl Config {
     pub fn now(&self, n: NaiveDateTime) -> Config {
         let mut c = self.clone();
         c.now = n;
+        c
+    }
+    // like `now` + `period`, but without the cost of constructing a fresh
+    // `Config` (and reading the clock) first
+    fn at(&self, now: NaiveDateTime, period: Period) -> Config {
+        let mut c = self.clone();
+        c.now = now;
+        c.period = period;
         c
     }
     fn period(&self, period: Period) -> Config {
@@ -857,6 +789,12 @@ impl Config {
         let mut c = self.clone();
         c.default_to_past = default_to_past;
         c
+    }
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        Config::new()
     }
 }
 
@@ -922,7 +860,6 @@ fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDa
 /// # Examples
 ///
 /// ```rust
-/// # extern crate two_timer;
 /// # use two_timer::first_moment;
 /// println!("{}", first_moment()); // -262144-01-01 00:00:00
 /// ```
@@ -935,7 +872,6 @@ pub fn first_moment() -> NaiveDateTime {
 /// # Examples
 ///
 /// ```rust
-/// # extern crate two_timer;
 /// # use two_timer::last_moment;
 /// println!("{}", last_moment()); // +262143-12-31 23:59:59.999
 /// ```
@@ -964,7 +900,7 @@ fn handle_specific_day(
     m: &Match,
     config: &Config,
 ) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
-    let now = config.now.clone();
+    let now = config.now;
     let mut times = m.all_names("time");
     if times.len() > 1 {
         return Err(TimeError::Parse(format!(
@@ -974,43 +910,27 @@ fn handle_specific_day(
     }
     let time = times.pop();
     if let Some(adverb) = m.name("adverb") {
-        return match adverb.as_str().chars().nth(0).expect("empty string") {
+        return Ok(match adverb.as_str().chars().next().expect("empty string") {
             // now
-            'n' | 'N' => Ok(moment_and_time(config, time)),
+            'n' | 'N' => moment_and_time(config, time),
             't' | 'T' => match adverb.as_str().chars().nth(2).expect("impossible string") {
                 // today
-                'd' | 'D' => Ok(moment_and_time(&config.period(Period::Day), time)),
+                'd' | 'D' => moment_and_time(&config.period(Period::Day), time),
                 // tomorrow
-                'm' | 'M' => Ok(moment_and_time(
-                    &Config::new()
-                        .now(now + Duration::days(1))
-                        .period(Period::Day),
-                    time,
-                )),
+                'm' | 'M' => {
+                    moment_and_time(&config.at(now + TimeDelta::days(1), Period::Day), time)
+                }
                 _ => unreachable!(),
             },
             // yesterday
-            'y' | 'Y' => Ok(moment_and_time(
-                &Config::new()
-                    .now(now - Duration::days(1))
-                    .period(Period::Day),
-                time,
-            )),
+            'y' | 'Y' => moment_and_time(&config.at(now - TimeDelta::days(1), Period::Day), time),
             _ => unreachable!(),
-        };
+        });
     }
     if let Some(date) = m.name("date_with_year") {
         if let Some(date) = date.name("n_date") {
-            return match n_date(date, config) {
-                Err(s) => Err(s),
-                Ok(d1) => {
-                    let d1 = d1.and_hms_opt(0, 0, 0).unwrap();
-                    Ok(moment_and_time(
-                        &Config::new().now(d1).period(Period::Day),
-                        time,
-                    ))
-                }
-            };
+            let d1 = n_date(date, config)?.and_hms_opt(0, 0, 0).unwrap();
+            return Ok(moment_and_time(&config.at(d1, Period::Day), time));
         }
         if let Some(date) = date.name("a_date") {
             let year = year(date, config);
@@ -1020,39 +940,26 @@ fn handle_specific_day(
             } else {
                 o_day(date, month)
             };
-            let d_opt = NaiveDate::from_ymd_opt(year, month, day);
-            return match d_opt {
-                None => Err(TimeError::ImpossibleDate(format!(
+            let Some(d1) = NaiveDate::from_ymd_opt(year, month, day) else {
+                return Err(TimeError::ImpossibleDate(format!(
                     "cannot construct date with year {}, month {}, and day {}",
                     year, month, day
-                ))),
-                Some(d1) => {
-                    if let Some(wd) = date.name("a_day") {
-                        let wd = weekday(wd.as_str());
-                        if wd == d1.weekday() {
-                            let d1 = d1.and_hms_opt(0, 0, 0).unwrap();
-                            Ok(moment_and_time(
-                                &Config::new().now(d1).period(Period::Day),
-                                time,
-                            ))
-                        } else {
-                            Err(TimeError::Weekday(format!(
-                                "the weekday of year {}, month {}, day {} is not {}",
-                                year,
-                                month,
-                                day,
-                                date.name("a_day").unwrap().as_str()
-                            )))
-                        }
-                    } else {
-                        let d1 = d1.and_hms_opt(0, 0, 0).unwrap();
-                        Ok(moment_and_time(
-                            &Config::new().now(d1).period(Period::Day),
-                            time,
-                        ))
-                    }
-                }
+                )));
             };
+            if let Some(wd) = date.name("a_day") {
+                let wd = weekday(wd.as_str());
+                if wd != d1.weekday() {
+                    return Err(TimeError::Weekday(format!(
+                        "the weekday of year {}, month {}, day {} is not {}",
+                        year,
+                        month,
+                        day,
+                        date.name("a_day").unwrap().as_str()
+                    )));
+                }
+            }
+            let d1 = d1.and_hms_opt(0, 0, 0).unwrap();
+            return Ok(moment_and_time(&config.at(d1, Period::Day), time));
         }
         unreachable!();
     }
@@ -1069,23 +976,21 @@ fn handle_specific_period(
             .name("displacement")
             .unwrap()
             .as_str()
-            .chars()
-            .nth(0)
+            .chars().next()
             .unwrap()
         {
-            'w' | 'W' => (Duration::weeks(count), Period::Week),
-            'd' | 'D' => (Duration::days(count), Period::Day),
-            'h' | 'H' => (Duration::hours(count), Period::Hour),
-            'm' | 'M' => (Duration::minutes(count), Period::Minute),
-            's' | 'S' => (Duration::seconds(count), Period::Second),
+            'w' | 'W' => (TimeDelta::weeks(count), Period::Week),
+            'd' | 'D' => (TimeDelta::days(count), Period::Day),
+            'h' | 'H' => (TimeDelta::hours(count), Period::Hour),
+            'm' | 'M' => (TimeDelta::minutes(count), Period::Minute),
+            's' | 'S' => (TimeDelta::seconds(count), Period::Second),
             _ => unreachable!(),
         };
         let d = match moment
             .name("from_now_or_ago")
             .unwrap()
             .as_str()
-            .chars()
-            .nth(0)
+            .chars().next()
             .unwrap()
         {
             'a' | 'A' => config.now - displacement,
@@ -1093,24 +998,19 @@ fn handle_specific_period(
             _ => unreachable!(),
         };
         let span = match period {
-            Period::Week => (d, d + Duration::weeks(1)),
+            Period::Week => (d, d + TimeDelta::weeks(1)),
             _ => moment_to_period(d, &period, config),
         };
         return Ok(span);
     }
     if let Some(moment) = moment.name("month_and_year") {
-        let y = year(moment, &config);
+        let y = year(moment, config);
         let m = a_month(moment);
-        return match NaiveDate::from_ymd_opt(y, m, 1) {
-            None => unreachable!(),
-            Some(d1) => {
-                let d1 = d1.and_hms_opt(0, 0, 0).unwrap();
-                Ok(moment_and_time(
-                    &Config::new().now(d1).period(Period::Month),
-                    None,
-                ))
-            }
-        };
+        let d1 = NaiveDate::from_ymd_opt(y, m, 1)
+            .expect("month and year 1 is always a valid date")
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        return Ok(moment_and_time(&config.at(d1, Period::Month), None));
     }
     if let Some(moment) = moment.name("modified_period") {
         let modifier = PeriodModifier::from_match(moment.name("modifier"));
@@ -1128,10 +1028,10 @@ fn handle_specific_period(
             let wd = weekday(wd.as_str());
             let offset = config.now.weekday().num_days_from_monday() as i64
                 - wd.num_days_from_monday() as i64;
-            let d = config.now.date() - Duration::days(offset);
+            let d = config.now.date() - TimeDelta::days(offset);
             let d = match modifier {
-                PeriodModifier::Next => d + Duration::days(7),
-                PeriodModifier::Last => d - Duration::days(7),
+                PeriodModifier::Next => d + TimeDelta::days(7),
+                PeriodModifier::Last => d - TimeDelta::days(7),
                 PeriodModifier::This => d,
             };
             return Ok(moment_to_period(
@@ -1144,8 +1044,8 @@ fn handle_specific_period(
             ModifiablePeriod::Week => {
                 let (d, _) = moment_to_period(config.now, &Period::Week, config);
                 let d = match modifier {
-                    PeriodModifier::Next => d + Duration::days(7),
-                    PeriodModifier::Last => d - Duration::days(7),
+                    PeriodModifier::Next => d + TimeDelta::days(7),
+                    PeriodModifier::Last => d - TimeDelta::days(7),
                     PeriodModifier::This => d,
                 };
                 Ok(moment_to_period(d, &Period::Week, config))
@@ -1154,11 +1054,11 @@ fn handle_specific_period(
                 let (_, d2) =
                     moment_to_period(config.now, &Period::Week, &config.monday_starts_week(true));
                 let d2 = match modifier {
-                    PeriodModifier::Next => d2 + Duration::days(7),
-                    PeriodModifier::Last => d2 - Duration::days(7),
+                    PeriodModifier::Next => d2 + TimeDelta::days(7),
+                    PeriodModifier::Last => d2 - TimeDelta::days(7),
                     PeriodModifier::This => d2,
                 };
-                let d1 = d2 - Duration::days(2);
+                let d1 = d2 - TimeDelta::days(2);
                 Ok((d1, d2))
             }
             ModifiablePeriod::Month => {
@@ -1191,15 +1091,15 @@ fn handle_specific_period(
                 };
                 Ok(moment_to_period(d, &Period::Year, config))
             }
-            ModifiablePeriod::PayPeriod => {
+            ModifiablePeriod::Pay => {
                 if config.pay_period_start.is_some() {
-                    let (d, _) = moment_to_period(config.now, &Period::PayPeriod, config);
+                    let (d, _) = moment_to_period(config.now, &Period::Pay, config);
                     let d = match modifier {
-                        PeriodModifier::Next => d + Duration::days(config.pay_period_length as i64),
-                        PeriodModifier::Last => d - Duration::days(config.pay_period_length as i64),
+                        PeriodModifier::Next => d + TimeDelta::days(config.pay_period_length as i64),
+                        PeriodModifier::Last => d - TimeDelta::days(config.pay_period_length as i64),
                         PeriodModifier::This => d,
                     };
-                    Ok(moment_to_period(d, &Period::PayPeriod, config))
+                    Ok(moment_to_period(d, &Period::Pay, config))
                 } else {
                     Err(TimeError::NoPayPeriod(String::from(
                         "no pay period start date provided",
@@ -1223,13 +1123,13 @@ enum ModifiablePeriod {
     Week,
     Month,
     Year,
-    PayPeriod,
+    Pay,
     Weekend,
 }
 
 impl ModifiablePeriod {
     fn from_match(m: &Match) -> ModifiablePeriod {
-        match m.as_str().chars().nth(0).expect("unreachable") {
+        match m.as_str().chars().next().expect("unreachable") {
             'w' | 'W' => {
                 if m.as_str().len() == 4 {
                     ModifiablePeriod::Week
@@ -1239,7 +1139,7 @@ impl ModifiablePeriod {
             }
             'm' | 'M' => ModifiablePeriod::Month,
             'y' | 'Y' => ModifiablePeriod::Year,
-            'p' | 'P' => ModifiablePeriod::PayPeriod,
+            'p' | 'P' => ModifiablePeriod::Pay,
             _ => unreachable!(),
         }
     }
@@ -1254,7 +1154,7 @@ enum PeriodModifier {
 impl PeriodModifier {
     fn from_match(m: Option<&Match>) -> PeriodModifier {
         if let Some(m) = m {
-            match m.as_str().chars().nth(0).expect("unreachable") {
+            match m.as_str().chars().next().expect("unreachable") {
                 't' | 'T' => PeriodModifier::This,
                 'l' | 'L' => PeriodModifier::Last,
                 'n' | 'N' => PeriodModifier::Next,
@@ -1280,11 +1180,11 @@ fn handle_specific_time(
             }
         };
     }
-    return if moment.has("first_time") {
+    if moment.has("first_time") {
         Ok(moment_to_period(first_moment(), &config.period, config))
     } else {
         Ok((last_moment(), last_moment()))
-    };
+    }
 }
 
 fn handle_one_time(
@@ -1319,7 +1219,7 @@ fn moment_and_time(config: &Config, daytime: Option<&Match>) -> (NaiveDateTime, 
             .with_second(second)
             .unwrap();
         if is_midnight {
-            m = m + Duration::days(1); // midnight is second 0 *of the next day*
+            m += TimeDelta::days(1); // midnight is second 0 *of the next day*
         }
         moment_to_period(m, &Period::Second, config)
     } else {
@@ -1351,9 +1251,9 @@ fn relative_moment(
         if delta <= 0 {
             delta += 7;
         }
-        let mut d = other_time.date() - Duration::days(delta);
+        let mut d = other_time.date() - TimeDelta::days(delta);
         if !before {
-            d = d + Duration::days(7);
+            d += TimeDelta::days(7);
         }
         return Ok(moment_and_time(
             &config
@@ -1372,12 +1272,12 @@ fn relative_moment(
             .with_second(second)
             .unwrap();
         if is_midnight {
-            t = t + Duration::days(1); // midnight is second 0 *of the next day*
+            t += TimeDelta::days(1); // midnight is second 0 *of the next day*
         }
         if before && t > *other_time {
-            t = t - Duration::days(1);
+            t -= TimeDelta::days(1);
         } else if !before && t < *other_time {
-            t = t + Duration::days(1);
+            t += TimeDelta::days(1);
         }
         return Ok(moment_to_period(t, &Period::Second, config));
     }
@@ -1389,12 +1289,10 @@ fn relative_moment(
             } else {
                 other_time.year()
             }
+        } else if month < other_time.month() {
+            other_time.year() + 1
         } else {
-            if month < other_time.month() {
-                other_time.year() + 1
-            } else {
-                other_time.year()
-            }
+            other_time.year()
         };
         let d = first_moment_of_day(year, month, 1);
         let (d1, d2) = moment_to_period(d, &Period::Month, config);
@@ -1427,11 +1325,7 @@ fn month_and_a_day(
         let mut year = config.now.year();
         let mut month = other_time.month();
         let day = o_day(m, month);
-        let wd = if let Some(a_day) = m.name("a_day") {
-            Some(weekday(a_day.as_str()))
-        } else {
-            None
-        };
+        let wd = m.name("a_day").map(|a_day| weekday(a_day.as_str()));
         // search backwards through the calendar for a possible day
         for _ in 0..4 * 7 * 12 {
             if let Some(d) = NaiveDate::from_ymd_opt(year, month, day) {
@@ -1467,12 +1361,10 @@ fn month_and_a_day(
     };
     let year = if before {
         config.now.year()
+    } else if month < other_time.month() {
+        other_time.year() + 1
     } else {
-        if month < other_time.month() {
-            other_time.year() + 1
-        } else {
-            other_time.year()
-        }
+        other_time.year()
     };
     match NaiveDate::from_ymd_opt(year, month, day) {
         Some(d) => Ok(d),
@@ -1527,7 +1419,7 @@ fn a_month(m: &Match) -> u32 {
 // last parameter is basically whether the value returned is for "midnight", which requires special handling
 fn time(m: &Match) -> (u32, u32, u32, bool) {
     if let Some(m) = m.name("named_time") {
-        return match m.as_str().chars().nth(0).unwrap() {
+        return match m.as_str().chars().next().unwrap() {
             'n' | 'N' => (12, 0, 0, false),
             _ => (0, 0, 0, true),
         };
@@ -1542,7 +1434,7 @@ fn time(m: &Match) -> (u32, u32, u32, bool) {
     } else if let Some(hour_12) = m.name("hour_12") {
         let mut hour = s_to_n(hour_12.name("h12").unwrap().as_str());
         hour = if let Some(am_pm) = m.name("am_pm") {
-            match am_pm.as_str().chars().nth(0).expect("empty string") {
+            match am_pm.as_str().chars().next().expect("empty string") {
                 'a' | 'A' => hour,
                 _ => hour + 12,
             }
@@ -1571,11 +1463,7 @@ fn time(m: &Match) -> (u32, u32, u32, bool) {
 }
 
 fn n_month(m: &Match) -> u32 {
-    lazy_static! {
-        static ref MONTH: Regex = Regex::new(r"\A0?(\d{1,2})\z").unwrap();
-    }
-    let cap = MONTH.captures(m.name("n_month").unwrap().as_str()).unwrap();
-    cap[1].parse::<u32>().unwrap()
+    s_to_n(m.name("n_month").unwrap().as_str())
 }
 
 fn year(m: &Match, config: &Config) -> i32 {
@@ -1591,14 +1479,12 @@ fn year(m: &Match, config: &Config) -> i32 {
                 // this century
                 config.now.year() - this_year + y
             }
+        } else if this_year > y {
+            // next century
+            config.now.year() - this_year + 100 + y
         } else {
-            if this_year > y {
-                // next century
-                config.now.year() - this_year + 100 + y
-            } else {
-                // this century
-                config.now.year() - this_year + y
-            }
+            // this century
+            config.now.year() - this_year + y
         }
     } else if let Some(suffix) = year.name("year_suffix") {
         let y = s_to_n(year.name("suffix_year").unwrap().as_str()) as i32;
@@ -1609,7 +1495,7 @@ fn year(m: &Match, config: &Config) -> i32 {
         }
     } else {
         let y = s_to_n(year.name("n_year").unwrap().as_str()) as i32;
-        if year.as_str().chars().nth(0).expect("unreachable") == '-' {
+        if year.as_str().chars().next().expect("unreachable") == '-' {
             -y
         } else {
             y
@@ -1618,10 +1504,15 @@ fn year(m: &Match, config: &Config) -> i32 {
 }
 
 fn s_to_n(s: &str) -> u32 {
-    lazy_static! {
-        static ref S_TO_N: Regex = Regex::new(r"\A[\D0]*(\d+)\z").unwrap();
+    // extracts the integer from strings like "'69", "08", or "0" -- the grammar
+    // guarantees these are digits with an optional prefix of non-digits and zeros
+    let digits = s.trim_start_matches(|c: char| !c.is_ascii_digit());
+    let digits = digits.trim_start_matches('0');
+    if digits.is_empty() {
+        0
+    } else {
+        digits.parse().unwrap()
     }
-    S_TO_N.captures(s).unwrap()[1].parse::<u32>().unwrap()
 }
 
 fn n_day(m: &Match) -> u32 {
@@ -1637,7 +1528,7 @@ fn o_day(m: &Match, month: u32) -> u32 {
         s[0..s.len() - 2].parse::<u32>().unwrap()
     } else {
         // roman
-        match s.chars().nth(0).expect("empty string") {
+        match s.chars().next().expect("empty string") {
             'n' | 'N' => {
                 // nones
                 match month {
@@ -1659,7 +1550,7 @@ fn o_day(m: &Match, month: u32) -> u32 {
 
 // converts the ordinals up to thirty-first
 fn ordinal(s: &str) -> u32 {
-    match s.chars().nth(0).expect("empty string") {
+    match s.chars().next().expect("empty string") {
         'f' | 'F' => {
             match s.chars().nth(1).expect("too short") {
                 'i' | 'I' => {
@@ -1780,16 +1671,16 @@ fn moment_to_period(
                 now.weekday().num_days_from_sunday()
             };
             let d1 = first_moment_of_day(now.year(), now.month(), now.day())
-                - Duration::days(offset as i64);
-            (d1, d1 + Duration::days(7))
+                - TimeDelta::days(offset as i64);
+            (d1, d1 + TimeDelta::days(7))
         }
         Period::Day => {
             let d1 = first_moment_of_day(now.year(), now.month(), now.day());
-            (d1, d1 + Duration::days(1))
+            (d1, d1 + TimeDelta::days(1))
         }
         Period::Hour => {
             let d1 = precise_moment(now.year(), now.month(), now.day(), now.hour(), 0, 0);
-            (d1, d1 + Duration::hours(1))
+            (d1, d1 + TimeDelta::hours(1))
         }
         Period::Minute => {
             let d1 = precise_moment(
@@ -1800,7 +1691,7 @@ fn moment_to_period(
                 now.minute(),
                 0,
             );
-            (d1, d1 + Duration::minutes(1))
+            (d1, d1 + TimeDelta::minutes(1))
         }
         Period::Second => {
             let d1 = precise_moment(
@@ -1811,9 +1702,9 @@ fn moment_to_period(
                 now.minute(),
                 now.second(),
             );
-            (d1, d1 + Duration::seconds(1))
+            (d1, d1 + TimeDelta::seconds(1))
         }
-        Period::PayPeriod => {
+        Period::Pay => {
             if let Some(pps) = config.pay_period_start {
                 // find the current pay period start
                 let offset = now.num_days_from_ce() - pps.num_days_from_ce();
@@ -1822,10 +1713,10 @@ fn moment_to_period(
                 if offset < 0 {
                     offset += config.pay_period_length as i64;
                 }
-                let d1 = (now.date() - Duration::days(offset))
+                let d1 = (now.date() - TimeDelta::days(offset))
                     .and_hms_opt(0, 0, 0)
                     .unwrap();
-                (d1, d1 + Duration::days(config.pay_period_length as i64))
+                (d1, d1 + TimeDelta::days(config.pay_period_length as i64))
             } else {
                 unreachable!()
             }
@@ -1842,11 +1733,11 @@ enum Period {
     Hour,
     Minute,
     Second,
-    PayPeriod,
+    Pay,
 }
 
 fn weekday(s: &str) -> Weekday {
-    match s.chars().nth(0).expect("empty string") {
+    match s.chars().next().expect("empty string") {
         'm' | 'M' => Weekday::Mon,
         't' | 'T' => {
             if s.len() == 1 {
@@ -1860,7 +1751,7 @@ fn weekday(s: &str) -> Weekday {
             }
         }
         'w' | 'W' => Weekday::Wed,
-        'H' => Weekday::Thu,
+        'r' | 'R' => Weekday::Thu, // the single-letter abbreviation for Thursday
         'F' | 'f' => Weekday::Fri,
         'S' | 's' => {
             if s.len() == 1 {
@@ -1886,18 +1777,17 @@ fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, Na
             .name("unit")
             .unwrap()
             .as_str()
-            .chars()
-            .nth(0)
+            .chars().next()
             .unwrap()
         {
-            'w' | 'W' => Duration::weeks(count),
-            'd' | 'D' => Duration::days(count),
-            'h' | 'H' => Duration::hours(count),
-            'm' | 'M' => Duration::minutes(count),
-            _ => Duration::seconds(count),
+            'w' | 'W' => TimeDelta::weeks(count),
+            'd' | 'D' => TimeDelta::days(count),
+            'h' | 'H' => TimeDelta::hours(count),
+            'm' | 'M' => TimeDelta::minutes(count),
+            _ => TimeDelta::seconds(count),
         };
         let direction = adjustment.name("direction").unwrap().as_str();
-        match direction.chars().nth(0).unwrap() {
+        match direction.chars().next().unwrap() {
             'b' | 'B' => {
                 if direction.len() == 6 {
                     // before
@@ -1914,7 +1804,7 @@ fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, Na
                     (d, d)
                 }
                 _ => {
-                    let d1 = d1 - Duration::milliseconds(unit.num_milliseconds() / 2);
+                    let d1 = d1 - TimeDelta::milliseconds(unit.num_milliseconds() / 2);
                     let d2 = d1 + unit;
                     (d1, d2)
                 }
@@ -1930,7 +1820,7 @@ fn count(m: &Match) -> u32 {
     let s = m.as_str();
     if m.has("a_count") {
         // cardinal numbers
-        match s.chars().nth(0).expect("impossibly short") {
+        match s.chars().next().expect("impossibly short") {
             'o' | 'O' => 1,
             't' | 'T' => match s.chars().nth(1).expect("impossibly short") {
                 'w' | 'W' => 2,

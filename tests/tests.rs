@@ -1,8 +1,6 @@
-extern crate two_timer;
 use two_timer::{parsable, parse, Config, TimeError};
-extern crate chrono;
 use chrono::naive::NaiveDate;
-use chrono::{Duration, Local, NaiveDateTime};
+use chrono::{Local, NaiveDateTime, TimeDelta};
 
 // a debugging method to print out the parse tree
 // fn show_me(p: &str) {
@@ -40,10 +38,10 @@ fn yesterday() {
     let (start, end, _) = parse("yesterday", Some(Config::new().now(now))).unwrap();
     assert!(start < now);
     assert!(end < now);
-    let then = now - Duration::days(1);
+    let then = now - TimeDelta::days(1);
     assert!(start < then);
     assert!(then < end);
-    let then = then - Duration::days(1);
+    let then = then - TimeDelta::days(1);
     assert!(then < start);
 }
 
@@ -53,10 +51,10 @@ fn tomorrow() {
     let (start, end, _) = parse("tomorrow", Some(Config::new().now(now))).unwrap();
     assert!(start > now);
     assert!(end > now);
-    let then = now + Duration::days(1);
+    let then = now + TimeDelta::days(1);
     assert!(start < then);
     assert!(then < end);
-    let then = then + Duration::days(1);
+    let then = then + TimeDelta::days(1);
     assert!(then > end);
 }
 
@@ -66,12 +64,37 @@ fn today() {
     let (start, end, _) = parse("today", Some(Config::new().now(now))).unwrap();
     assert!(start < now);
     assert!(end > now);
-    let then = now + Duration::days(1);
+    let then = now + TimeDelta::days(1);
     assert!(start < then);
     assert!(then > end);
-    let then = now - Duration::days(1);
+    let then = now - TimeDelta::days(1);
     assert!(then < start);
     assert!(then < end);
+}
+
+#[test]
+fn single_letter_weekdays() {
+    // 2026-11-21 was a Saturday; the most recent day before it for each letter
+    let now = precise_moment(2026, 11, 21, 12, 0, 0);
+    let conf = Config::new().now(now);
+    for (phrase, day) in [
+        ("M", 16),  // Monday
+        ("T", 17),  // Tuesday
+        ("W", 18),  // Wednesday
+        ("R", 19),  // Thursday -- used to panic
+        ("F", 20),  // Friday
+        ("S", 14),  // Saturday -- on a Saturday, "S" means the previous one
+        ("U", 15),  // Sunday
+    ] {
+        let (start, end, _) = parse(phrase, Some(conf.clone())).unwrap();
+        assert_eq!(
+            precise_moment(2026, 11, day, 0, 0, 0),
+            start,
+            "wrong day for {:?}",
+            phrase
+        );
+        assert_eq!(start + TimeDelta::days(1), end);
+    }
 }
 
 #[test]
@@ -87,17 +110,17 @@ fn day_5_6_69_at_3_30_pm() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
 #[test]fn numeric_months() {
-    for m in (1..=12).into_iter() {
+    for m in 1..=12 {
         let date: String = format!("1969-{}-1", &m);
         let then = precise_moment(1969, m, 1, 0, 0, 0);
         let (start, end, _) = parse(&date, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::days(1), end);
+        assert_eq!(then + TimeDelta::days(1), end);
     }
 }
 
@@ -114,7 +137,7 @@ fn day_5_6_69_at_3_pm() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
@@ -131,7 +154,7 @@ fn day_5_6_69_at_3_30_00_pm() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
@@ -148,7 +171,7 @@ fn day_5_6_69_at_3_30_01_pm() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
@@ -165,7 +188,7 @@ fn day_5_6_69_at_3_30_01_am() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
@@ -176,7 +199,7 @@ fn at_3_pm() {
     for phrase in ["3 PM", "3 pm", "15"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
@@ -188,7 +211,7 @@ fn at_3_pm_default_to_future() {
         let (start, end, _) =
             parse(phrase, Some(Config::new().now(now).default_to_past(false))).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
@@ -199,7 +222,7 @@ fn at_3_00_pm() {
     for phrase in ["3:00 PM", "3:00 pm", "15:00"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
@@ -210,7 +233,7 @@ fn at_3_00_00_pm() {
     for phrase in ["3:00:00 PM", "3:00:00 pm", "15:00:00"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
@@ -221,7 +244,7 @@ fn at_3_pm_yesterday() {
     for phrase in ["3 PM yesterday", "3 pm yesterday", "15 yesterday"].iter() {
         let (start, end, _) = parse(phrase, Some(Config::new().now(now))).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::seconds(1), end);
+        assert_eq!(then + TimeDelta::seconds(1), end);
     }
 }
 
@@ -264,7 +287,7 @@ fn alphabetic_5_6_69() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::days(1), end);
+        assert_eq!(then + TimeDelta::days(1), end);
     }
 }
 
@@ -349,7 +372,7 @@ fn ymd_5_31_69() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::days(1), end);
+        assert_eq!(then + TimeDelta::days(1), end);
     }
 }
 
@@ -759,7 +782,7 @@ fn dawn_of_time() {
     {
         let (start, end, _) = parse(phrase, None).unwrap();
         assert_eq!(then, start);
-        assert_eq!(then + Duration::minutes(1), end);
+        assert_eq!(then + TimeDelta::minutes(1), end);
     }
 }
 
@@ -799,7 +822,7 @@ fn friday() {
     let then = first_moment_of_day(1969, 5, 2);
     let (start, end, _) = parse("Friday", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::days(1), end);
+    assert_eq!(then + TimeDelta::days(1), end);
 }
 
 #[test]
@@ -808,7 +831,7 @@ fn tuesday() {
     let then = first_moment_of_day(1969, 4, 29);
     let (start, end, _) = parse("Tuesday", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::days(1), end);
+    assert_eq!(then + TimeDelta::days(1), end);
 }
 
 #[test]
@@ -817,7 +840,7 @@ fn monday() {
     let then = first_moment_of_day(1969, 5, 5);
     let (start, end, _) = parse("Monday", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::days(1), end);
+    assert_eq!(then + TimeDelta::days(1), end);
 }
 
 #[test]
@@ -830,7 +853,7 @@ fn monday_default_to_future() {
     )
     .unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::days(1), end);
+    assert_eq!(then + TimeDelta::days(1), end);
 }
 
 #[test]
@@ -839,7 +862,7 @@ fn friday_at_3_pm() {
     let then = precise_moment(1969, 5, 2, 15, 0, 0);
     let (start, end, _) = parse("Friday at 3 pm", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::seconds(1), end);
+    assert_eq!(then + TimeDelta::seconds(1), end);
 }
 
 #[test]
@@ -848,7 +871,7 @@ fn tuesday_at_3_pm() {
     let then = precise_moment(1969, 4, 29, 15, 0, 0);
     let (start, end, _) = parse("Tuesday at 3 pm", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::seconds(1), end);
+    assert_eq!(then + TimeDelta::seconds(1), end);
 }
 
 #[test]
@@ -857,7 +880,7 @@ fn monday_at_3_pm() {
     let then = precise_moment(1969, 5, 5, 15, 0, 0);
     let (start, end, _) = parse("Monday at 3 pm", Some(Config::new().now(now))).unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::seconds(1), end);
+    assert_eq!(then + TimeDelta::seconds(1), end);
 }
 
 #[test]
@@ -870,7 +893,7 @@ fn monday_at_3_pm_default_to_future() {
     )
     .unwrap();
     assert_eq!(then, start);
-    assert_eq!(then + Duration::seconds(1), end);
+    assert_eq!(then + TimeDelta::seconds(1), end);
 }
 
 #[test]
@@ -1007,7 +1030,7 @@ fn very_specific_up_to_very_specific() {
 #[test]
 fn somewhat_specific_through_somewhat_specific() {
     let d1 = precise_moment(2014, 10, 6, 8, 57, 00);
-    let d2 = precise_moment(2020, 3, 6, 17, 28, 01);
+    let d2 = precise_moment(2020, 3, 6, 17, 28, 1);
     let (start, end, _) = parse("2014-10-06 08:57 - 2020-03-06 17:28", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1025,7 +1048,7 @@ fn somewhat_specific_up_to_somewhat_specific() {
 #[test]
 fn april_3_25_bc() {
     let d1 = precise_moment(-24, 4, 3, 0, 0, 0);
-    let d2 = d1 + Duration::days(1);
+    let d2 = d1 + TimeDelta::days(1);
     let (start, end, _) = parse("April 3, 25 BC", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1034,7 +1057,7 @@ fn april_3_25_bc() {
 #[test]
 fn april_3_25_ad() {
     let d1 = first_moment_of_day(25, 4, 3);
-    let d2 = d1 + Duration::days(1);
+    let d2 = d1 + TimeDelta::days(1);
     let (start, end, _) = parse("April 3, 25 AD", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1043,7 +1066,7 @@ fn april_3_25_ad() {
 #[test]
 fn april_3_25bc() {
     let d1 = precise_moment(-24, 4, 3, 0, 0, 0);
-    let d2 = d1 + Duration::days(1);
+    let d2 = d1 + TimeDelta::days(1);
     let (start, end, _) = parse("April 3, 25BC", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1052,7 +1075,7 @@ fn april_3_25bc() {
 #[test]
 fn april_3_25ad() {
     let d1 = first_moment_of_day(25, 4, 3);
-    let d2 = d1 + Duration::days(1);
+    let d2 = d1 + TimeDelta::days(1);
     let (start, end, _) = parse("April 3, 25AD", None).unwrap();
     assert_eq!(d1, start);
     assert_eq!(d2, end);
@@ -1235,12 +1258,12 @@ fn next_weekend_on_saturday_when_sunday_starts_week() {
 #[test]
 fn regression_12pm() {
     let d1 = first_moment_of_day(2018, 5, 21);
-    let d2 = d1 + Duration::seconds(1);
+    let d2 = d1 + TimeDelta::seconds(1);
     if let Ok((start, end, _)) = parse("12 pm on May 21, 2018", None) {
         assert_eq!(d1, start);
         assert_eq!(d2, end);
     } else {
-        assert!(false);
+        panic!("assertion failed");
     }
 }
 
@@ -1252,7 +1275,7 @@ fn year_2000() {
         assert_eq!(d1, start);
         assert_eq!(d2, end);
     } else {
-        assert!(false);
+        panic!("assertion failed");
     }
 }
 
@@ -1293,8 +1316,8 @@ fn ordinals() {
     ];
     let base_date = first_moment_of_day(2018, 1, 1);
     for (cardinal, abbv, ordinal, weekday) in patterns.iter() {
-        let d1 = base_date + Duration::days(*cardinal as i64 - 1);
-        let d2 = d1 + Duration::days(1);
+        let d1 = base_date + TimeDelta::days(*cardinal as i64 - 1);
+        let d2 = d1 + TimeDelta::days(1);
         let subpatterns = [
             format!("January {}, 2018", abbv),
             format!("{}, January {}, 2018", weekday, abbv),
@@ -1313,7 +1336,7 @@ fn ordinals() {
                 }
                 Err(e) => {
                     println!("{:?}", e);
-                    assert!(false, "didn't match");
+                    panic!("didn't match");
                 }
             }
         }
@@ -1338,13 +1361,10 @@ fn kalends_nones_ids() {
     ];
     for (i, m) in months.iter().enumerate() {
         let i = (i + 1) as u32;
-        let big_month = match i {
-            3 | 5 | 7 | 10 => true,
-            _ => false,
-        };
+        let big_month = matches!(i, 3 | 5 | 7 | 10);
         // kalends
         let d1 = precise_moment(2018, i, 1, 0, 0, 0);
-        let d2 = d1 + Duration::days(1);
+        let d2 = d1 + TimeDelta::days(1);
         let p = format!("the kalends of {} 2018", m);
         match parse(&p, None) {
             Ok((start, end, _)) => {
@@ -1353,12 +1373,12 @@ fn kalends_nones_ids() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
         // nones
         let d1 = precise_moment(2018, i, if big_month { 7 } else { 5 }, 0, 0, 0);
-        let d2 = d1 + Duration::days(1);
+        let d2 = d1 + TimeDelta::days(1);
         let p = format!("the nones of {} 2018", m);
         match parse(&p, None) {
             Ok((start, end, _)) => {
@@ -1367,12 +1387,12 @@ fn kalends_nones_ids() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
         // ides
         let d1 = precise_moment(2018, i, if big_month { 15 } else { 13 }, 0, 0, 0);
-        let d2 = d1 + Duration::days(1);
+        let d2 = d1 + TimeDelta::days(1);
         let p = format!("the ides of {} 2018", m);
         match parse(&p, None) {
             Ok((start, end, _)) => {
@@ -1381,7 +1401,7 @@ fn kalends_nones_ids() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1391,7 +1411,7 @@ fn kalends_nones_ids() {
 fn day_and_month() {
     let now = first_moment_of_day(1969, 5, 10);
     let d1 = first_moment_of_day(1969, 5, 15);
-    let d2 = d1 + Duration::days(1);
+    let d2 = d1 + TimeDelta::days(1);
     let patterns = [
         "the ides of May",
         "5-15",
@@ -1408,7 +1428,7 @@ fn day_and_month() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1418,7 +1438,7 @@ fn day_and_month() {
 fn day_and_month_default_to_future() {
     let now = first_moment_of_day(1969, 6, 16);
     let d1 = first_moment_of_day(1970, 5, 15);
-    let d2 = d1 + Duration::days(1);
+    let d2 = d1 + TimeDelta::days(1);
     let patterns = [
         "the ides of May",
         "5-15",
@@ -1434,7 +1454,7 @@ fn day_and_month_default_to_future() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1442,7 +1462,7 @@ fn day_and_month_default_to_future() {
 
 #[test]
 fn one_week_before_may_6_1969() {
-    let d1 = first_moment_of_day(1969, 5, 6) - Duration::days(7);
+    let d1 = first_moment_of_day(1969, 5, 6) - TimeDelta::days(7);
     let patterns = ["one week before May 6, 1969", "1 week before May 6, 1969"];
     for p in patterns.iter() {
         match parse(p, None) {
@@ -1452,7 +1472,7 @@ fn one_week_before_may_6_1969() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1460,7 +1480,7 @@ fn one_week_before_may_6_1969() {
 
 #[test]
 fn one_week_after_may_6_1969() {
-    let d1 = first_moment_of_day(1969, 5, 7) + Duration::days(7);
+    let d1 = first_moment_of_day(1969, 5, 7) + TimeDelta::days(7);
     let patterns = ["one week after May 6, 1969", "1 week after May 6, 1969"];
     for p in patterns.iter() {
         match parse(p, None) {
@@ -1470,7 +1490,7 @@ fn one_week_after_may_6_1969() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1479,8 +1499,8 @@ fn one_week_after_may_6_1969() {
 #[test]
 fn one_week_before_and_after_may_6_1969() {
     let d = first_moment_of_day(1969, 5, 6);
-    let d1 = d - Duration::days(7);
-    let d2 = d + Duration::days(7);
+    let d1 = d - TimeDelta::days(7);
+    let d2 = d + TimeDelta::days(7);
     let patterns = [
         "one week before and after May 6, 1969",
         "1 week before and after May 6, 1969",
@@ -1493,7 +1513,7 @@ fn one_week_before_and_after_may_6_1969() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1501,8 +1521,8 @@ fn one_week_before_and_after_may_6_1969() {
 
 #[test]
 fn one_week_around_may_6_1969() {
-    let d1 = first_moment_of_day(1969, 5, 6) - Duration::milliseconds(7 * 24 * 60 * 60 * 1000 / 2);
-    let d2 = d1 + Duration::days(7);
+    let d1 = first_moment_of_day(1969, 5, 6) - TimeDelta::milliseconds(7 * 24 * 60 * 60 * 1000 / 2);
+    let d2 = d1 + TimeDelta::days(7);
     let patterns = ["one week around May 6, 1969", "1 week around May 6, 1969"];
     for p in patterns.iter() {
         match parse(p, None) {
@@ -1512,7 +1532,7 @@ fn one_week_around_may_6_1969() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1525,7 +1545,7 @@ fn number_before_test() {
         "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
     ];
     for (i, p) in nums.iter().enumerate() {
-        let d = d - Duration::seconds((i + 2) as i64);
+        let d = d - TimeDelta::seconds((i + 2) as i64);
         let p = format!("{} seconds before May 6, 1969 at 1:00 PM", p);
         match parse(&p, None) {
             Ok((start, end, _)) => {
@@ -1534,7 +1554,7 @@ fn number_before_test() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1543,7 +1563,7 @@ fn number_before_test() {
 #[test]
 fn noon() {
     let d1 = precise_moment(1969, 5, 6, 12, 0, 0);
-    let d2 = d1 + Duration::seconds(1);
+    let d2 = d1 + TimeDelta::seconds(1);
     match parse("noon on May 6, 1969", None) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1551,7 +1571,7 @@ fn noon() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
     let now = first_moment_of_day(1969, 5, 6);
@@ -1562,7 +1582,7 @@ fn noon() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
 }
@@ -1571,7 +1591,7 @@ fn noon() {
 fn simple_noon_past_and_future() {
     let now = first_moment_of_day(1969, 5, 6);
     let d1 = precise_moment(1969, 5, 5, 12, 0, 0);
-    let d2 = d1 + Duration::seconds(1);
+    let d2 = d1 + TimeDelta::seconds(1);
     match parse("noon", Some(Config::new().now(now))) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1579,11 +1599,11 @@ fn simple_noon_past_and_future() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
-    let d1 = d1 + Duration::days(1);
-    let d2 = d2 + Duration::days(1);
+    let d1 = d1 + TimeDelta::days(1);
+    let d2 = d2 + TimeDelta::days(1);
     match parse("noon", Some(Config::new().now(now).default_to_past(false))) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1591,7 +1611,7 @@ fn simple_noon_past_and_future() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
 }
@@ -1599,7 +1619,7 @@ fn simple_noon_past_and_future() {
 #[test]
 fn midnight() {
     let d1 = first_moment_of_day(1969, 5, 7);
-    let d2 = d1 + Duration::seconds(1);
+    let d2 = d1 + TimeDelta::seconds(1);
     match parse("midnight on May 6, 1969", None) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1607,7 +1627,7 @@ fn midnight() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
 }
@@ -1639,11 +1659,11 @@ fn displacement() {
                 String::from(*phrase) + "s"
             };
             let (displacement1, displacement2) = match period {
-                Period::Week => (Duration::weeks(*n), Duration::weeks(1)),
-                Period::Day => (Duration::days(*n), Duration::days(1)),
-                Period::Hour => (Duration::hours(*n), Duration::hours(1)),
-                Period::Minute => (Duration::minutes(*n), Duration::minutes(1)),
-                _ => (Duration::seconds(*n), Duration::seconds(1)),
+                Period::Week => (TimeDelta::weeks(*n), TimeDelta::weeks(1)),
+                Period::Day => (TimeDelta::days(*n), TimeDelta::days(1)),
+                Period::Hour => (TimeDelta::hours(*n), TimeDelta::hours(1)),
+                Period::Minute => (TimeDelta::minutes(*n), TimeDelta::minutes(1)),
+                _ => (TimeDelta::seconds(*n), TimeDelta::seconds(1)),
             };
             let d1 = now - displacement1;
             let d2 = d1 + displacement2;
@@ -1655,7 +1675,7 @@ fn displacement() {
                 }
                 Err(e) => {
                     println!("{:?}", e);
-                    assert!(false, "didn't match");
+                    panic!("didn't match");
                 }
             }
             let d1 = now + displacement1;
@@ -1668,7 +1688,7 @@ fn displacement() {
                 }
                 Err(e) => {
                     println!("{:?}", e);
-                    assert!(false, "didn't match");
+                    panic!("didn't match");
                 }
             }
         }
@@ -1685,7 +1705,7 @@ fn friday_the_13th() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
 }
@@ -1700,7 +1720,7 @@ fn the_31st() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
 }
@@ -1708,7 +1728,7 @@ fn the_31st() {
 #[test]
 fn specific_time() {
     let d1 = precise_moment(1969, 5, 6, 12, 3, 5);
-    let d2 = d1 + Duration::seconds(1);
+    let d2 = d1 + TimeDelta::seconds(1);
     match parse("1969-05-06 12:03:05", None) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1716,7 +1736,7 @@ fn specific_time() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
 }
@@ -1724,7 +1744,7 @@ fn specific_time() {
 #[test]
 fn no_space_before_pm() {
     let d1 = precise_moment(1969, 5, 6, 13, 0, 0);
-    let d2 = d1 + Duration::seconds(1);
+    let d2 = d1 + TimeDelta::seconds(1);
     match parse("1969-05-06 at 1PM", None) {
         Ok((start, end, _)) => {
             assert_eq!(d1, start);
@@ -1732,7 +1752,7 @@ fn no_space_before_pm() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
     match parse("1969-05-06 at 1:00PM", None) {
@@ -1742,7 +1762,7 @@ fn no_space_before_pm() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
     match parse("1969-05-06 at 1:00:00PM", None) {
@@ -1752,21 +1772,20 @@ fn no_space_before_pm() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
 }
 
 #[test]
 fn relative_time_regression() {
-    parse("24", None).unwrap();
-    assert!(true, "'24' didn't cause a panic");
+    parse("24", None).unwrap(); // '24' should not cause a panic
 }
 
 #[test]
 fn since_yesterday() {
     let then = first_moment_of_day(1969, 5, 10);
-    let now = then + Duration::hours(5);
+    let now = then + TimeDelta::hours(5);
     match parse("since yesterday", Some(Config::new().now(now))) {
         Ok((start, end, two_times)) => {
             assert!(!two_times, "isn't a two-time expression");
@@ -1775,7 +1794,7 @@ fn since_yesterday() {
         }
         Err(e) => {
             println!("{:?}", e);
-            assert!(false, "didn't match");
+            panic!("didn't match");
         }
     }
 }
@@ -1783,7 +1802,7 @@ fn since_yesterday() {
 #[test]
 fn since_noon() {
     let then = precise_moment(1969, 5, 10, 12, 0, 0);
-    let now = then + Duration::hours(5);
+    let now = then + TimeDelta::hours(5);
     for expr in &[
         "since noon",
         "since noon today",
@@ -1801,7 +1820,7 @@ fn since_noon() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1810,7 +1829,7 @@ fn since_noon() {
 #[test]
 fn since_may() {
     let then = first_moment_of_day(1969, 5, 1);
-    let now = then + Duration::hours(5);
+    let now = then + TimeDelta::hours(5);
     for expr in &[
         "since may",
         "since the start of may",
@@ -1827,7 +1846,7 @@ fn since_may() {
             }
             Err(e) => {
                 println!("{:?}", e);
-                assert!(false, "didn't match");
+                panic!("didn't match");
             }
         }
     }
@@ -1836,13 +1855,13 @@ fn since_may() {
 #[test]
 fn since_the_end_of_may_misordered() {
     let then = first_moment_of_day(1969, 5, 1);
-    let now = then + Duration::hours(5);
+    let now = then + TimeDelta::hours(5);
     for expr in &["since the end of may", "after the end of may"] {
         match parse(expr, Some(Config::new().now(now))) {
-            Ok((..)) => assert!(false, "this should not succeed"),
+            Ok((..)) => panic!("this should not succeed"),
             Err(e) => match e {
-                TimeError::Misordered(_) => assert!(true, "correct error"),
-                _ => assert!(false, "unexpected error: {:?}", e),
+                TimeError::Misordered(_) => {} // correct error
+                _ => panic!("unexpected error: {:?}", e),
             },
         }
     }
