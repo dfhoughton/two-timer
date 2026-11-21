@@ -1,15 +1,49 @@
-use two_timer::{parsable, parse, Config, TimeError};
 use chrono::naive::NaiveDate;
 use chrono::{Local, NaiveDateTime, TimeDelta};
+use two_timer::{Config, TimeError, parsable};
 
 // a debugging method to print out the parse tree
 // fn show_me(p: &str) {
 //     println!("{}", two_timer::MATCHER.parse(p).unwrap());
 // }
 
+// adapter so these tests can keep using the pre-3.0 tuple API
+fn parse(
+    phrase: &str,
+    config: Option<Config>,
+) -> Result<(NaiveDateTime, NaiveDateTime, bool), TimeError> {
+    two_timer::parse(phrase, config).map(Into::into)
+}
+
 #[test]
 fn can_use_parsable() {
     assert!(parsable("2019/1/1"));
+}
+
+#[test]
+fn parse_returns_time_range() {
+    use two_timer::TimeRange;
+    // a single period is not a literal range
+    let range = two_timer::parse("5/6/69", None).unwrap();
+    assert!(!range.is_range);
+    assert_eq!(
+        range,
+        TimeRange::moment(
+            precise_moment(1969, 5, 6, 0, 0, 0),
+            precise_moment(1969, 5, 7, 0, 0, 0)
+        )
+    );
+    // a range expression is flagged as such
+    let range = two_timer::parse("5/6/69 to 5/7/69", None).unwrap();
+    assert!(range.is_range);
+    assert!(range.start < range.end);
+    // conversion to and from the legacy 3-tuple
+    let tuple: (NaiveDateTime, NaiveDateTime, bool) = range.into();
+    assert_eq!(tuple.0, range.start);
+    assert_eq!(tuple.1, range.end);
+    assert_eq!(tuple.2, range.is_range);
+    let back: TimeRange = tuple.into();
+    assert_eq!(back, range);
 }
 
 #[test]
@@ -78,13 +112,13 @@ fn single_letter_weekdays() {
     let now = precise_moment(2026, 11, 21, 12, 0, 0);
     let conf = Config::new().now(now);
     for (phrase, day) in [
-        ("M", 16),  // Monday
-        ("T", 17),  // Tuesday
-        ("W", 18),  // Wednesday
-        ("R", 19),  // Thursday -- used to panic
-        ("F", 20),  // Friday
-        ("S", 14),  // Saturday -- on a Saturday, "S" means the previous one
-        ("U", 15),  // Sunday
+        ("M", 16), // Monday
+        ("T", 17), // Tuesday
+        ("W", 18), // Wednesday
+        ("R", 19), // Thursday -- used to panic
+        ("F", 20), // Friday
+        ("S", 14), // Saturday -- on a Saturday, "S" means the previous one
+        ("U", 15), // Sunday
     ] {
         let (start, end, _) = parse(phrase, Some(conf.clone())).unwrap();
         assert_eq!(
@@ -114,7 +148,8 @@ fn day_5_6_69_at_3_30_pm() {
     }
 }
 
-#[test]fn numeric_months() {
+#[test]
+fn numeric_months() {
     for m in 1..=12 {
         let date: String = format!("1969-{}-1", &m);
         let then = precise_moment(1969, m, 1, 0, 0, 0);

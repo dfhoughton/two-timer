@@ -1,5 +1,18 @@
 # Change Log
 
+## 3.0.0 *2026-11-21*
+* ***BREAKING*** `parse` now returns a `TimeRange` struct with named fields (`start`, `end`, `is_range`)
+instead of a `(NaiveDateTime, NaiveDateTime, bool)` tuple; `From` conversions to and from the tuple are
+provided, so `let (a, b, c) = parse(..).unwrap().into();` keeps working
+* ***BREAKING*** `TimeError` is now `#[non_exhaustive]`
+* ***BREAKING*** the `Config` builder methods (`now`, `monday_starts_week`, `pay_period_length`,
+`pay_period_start`, `default_to_past`) now consume and return `self` rather than cloning `&self`
+* ***BREAKING*** the `lazy_static` dependency is gone; the doc-hidden `GRAMMAR`, `MATCHER`,
+`SMALL_GRAMMAR`, and `SMALL_MATCHER` statics are now `std::sync::LazyLock` values
+* moved to edition 2024; MSRV is now 1.85 (`rust-version = "1.85"`)
+* bumped `pidgin` to 0.6, which also drops pidgin's own `lazy_static` dependency
+* the crate is now formatted with rustfmt
+
 ## 2.3.0 *2026-11-21*
 * moved to edition 2021 and declared an MSRV (`rust-version = "1.65"`)
 * removed the direct `regex` dependency -- the two regexes used for extracting numbers from matches

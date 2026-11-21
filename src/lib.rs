@@ -6,7 +6,7 @@ moments of today, "May 6, 1968" into the first and last moments of that day, "la
 into the first and last moments of that year, and so on. It does this even for expressions
 generally interpreted as referring to a point in time, such as "3 PM", though for these it
 always assumes a granularity of one second. For pointwise expression the first moment is the
-point explicitly named. The `parse` expression actually returns a 3-tuple consisting of the
+point explicitly named. The `parse` function returns a [`TimeRange`] consisting of the
 two timestamps and whether the expression is literally a range -- two time expressions
 separated by a preposition such as "to", "through", "up to", or "until".
 
@@ -37,7 +37,7 @@ let phrases = [
         .len();
     for phrase in phrases.iter() {
         match parse(phrase, None) {
-            Ok((d1, d2, _)) => println!("{:width$} => {} --- {}", phrase, d1, d2, width = max),
+            Ok(range) => println!("{:width$} => {} --- {}", phrase, range.start, range.end, width = max),
             Err(e) => println!("{:?}", e),
         }
     }
@@ -46,7 +46,7 @@ let phrases = [
     let conf = Config::new().now(now);
     for phrase in phrases.iter() {
         match parse(phrase, Some(conf.clone())) {
-            Ok((d1, d2, _)) => println!("{:width$} => {} --- {}", phrase, d1, d2, width = max),
+            Ok(range) => println!("{:width$} => {} --- {}", phrase, range.start, range.end, width = max),
             Err(e) => println!("{:?}", e),
         }
     }
@@ -155,9 +155,9 @@ for example, you could do this:
 
 ```rust
 # use two_timer::{parse, Config};
-let (reference_time, _, _) = parse("5/6/69", None).unwrap();
+let reference_time = parse("5/6/69", None).unwrap().start;
 let config = Config::new().pay_period_start(Some(reference_time.date()));
-let (t1, t2, _) = parse("next pay period", Some(config)).unwrap();
+let range = parse("next pay period", Some(config)).unwrap();
 ```
 
 # Ambiguous Year Formats
@@ -216,14 +216,14 @@ only the typical expressions used with JobLog, falling back on the full grammar 
 #![recursion_limit = "1024"]
 use chrono::naive::{NaiveDate, NaiveDateTime};
 use chrono::{Datelike, Local, TimeDelta, Timelike, Weekday};
-use lazy_static::lazy_static;
-use pidgin::{grammar, Grammar, Match, Matcher};
+use pidgin::{Grammar, Match, Matcher, grammar};
+use std::sync::LazyLock;
 
-lazy_static! {
-    // making this public is useful for testing, but best to keep it hidden to
-    // limit complexity and commitment
-    #[doc(hidden)]
-    pub static ref GRAMMAR: Grammar = grammar!{
+// making this public is useful for testing, but best to keep it hidden to
+// limit complexity and commitment
+#[doc(hidden)]
+pub static GRAMMAR: LazyLock<Grammar> = LazyLock::new(|| {
+    grammar! {
         (?ibBw)
 
         TOP -> r(r"\A") <time_expression> r(r"\z")
@@ -487,20 +487,18 @@ lazy_static! {
                     .flat_map(|i| vec![format!("'{:02}", i), format!("{:02}", i)])
                     .collect::<Vec<_>>()
             ]
-    };
-}
+    }
+});
 // code generated via cargo run --bin serializer
 // this saves the cost of generating GRAMMAR
-lazy_static! {
-    #[doc(hidden)]
-    pub static ref MATCHER: Matcher = GRAMMAR.matcher().unwrap();
-}
-lazy_static! {
-    // making this public is useful for testing, but best to keep it hidden to
-    // limit complexity and commitment
-    #[doc(hidden)]
-    // this is a stripped-down version of GRAMMAR that just containst the most commonly used expressions
-    pub static ref SMALL_GRAMMAR: Grammar = grammar!{
+#[doc(hidden)]
+pub static MATCHER: LazyLock<Matcher> = LazyLock::new(|| GRAMMAR.matcher().unwrap());
+// making this public is useful for testing, but best to keep it hidden to
+// limit complexity and commitment
+#[doc(hidden)]
+// this is a stripped-down version of GRAMMAR that just containst the most commonly used expressions
+pub static SMALL_GRAMMAR: LazyLock<Grammar> = LazyLock::new(|| {
+    grammar! {
         (?ibBw)
 
         TOP -> r(r"\A") <time_expression> r(r"\z")
@@ -561,14 +559,12 @@ lazy_static! {
                      .flat_map(|w| vec![w.to_string(), w[0..3].to_string()])
                      .collect::<Vec<_>>()
             ]
-    };
-}
+    }
+});
 // code generated via cargo run --bin serializer
 // this saves the cost of generating GRAMMAR
-lazy_static! {
-    #[doc(hidden)]
-    pub static ref SMALL_MATCHER : Matcher = SMALL_GRAMMAR.matcher().unwrap();
-}
+#[doc(hidden)]
+pub static SMALL_MATCHER: LazyLock<Matcher> = LazyLock::new(|| SMALL_GRAMMAR.matcher().unwrap());
 
 /// Simply returns whether the given phrase is parsable as a time expression. This is slightly
 /// more efficient than `parse(expression, None).is_ok()` as no parse tree is generated.
@@ -587,8 +583,64 @@ pub fn parsable(phrase: &str) -> bool {
     }
 }
 
-/// Converts a time expression into a pair or timestamps and a boolean indicating whether
-/// the expression was literally a range, such as "9 to 11", as opposed to "9 AM", say.
+/// The result of parsing a time expression: a half-open range of timestamps
+/// (`start..end`), plus a flag indicating whether the expression was literally
+/// a range -- two time expressions joined by a preposition such as "to" or
+/// "through" -- as opposed to a single moment or period like "9 AM" or "last year".
+///
+/// # Examples
+///
+/// ```rust
+/// # use two_timer::{parse, TimeRange};
+/// let range: TimeRange = parse("today", None).unwrap();
+/// assert!(!range.is_range);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TimeRange {
+    /// The first moment of the range.
+    pub start: NaiveDateTime,
+    /// The first moment *after* the range. Ranges are half-open: `[start, end)`.
+    pub end: NaiveDateTime,
+    /// Whether the parsed expression was literally a range, such as "9 to 11".
+    pub is_range: bool,
+}
+
+impl TimeRange {
+    /// A range spanning `start..end` that was *not* expressed as a literal range.
+    pub fn moment(start: NaiveDateTime, end: NaiveDateTime) -> TimeRange {
+        TimeRange {
+            start,
+            end,
+            is_range: false,
+        }
+    }
+    /// A range spanning `start..end` that *was* expressed as a literal range.
+    pub fn range(start: NaiveDateTime, end: NaiveDateTime) -> TimeRange {
+        TimeRange {
+            start,
+            end,
+            is_range: true,
+        }
+    }
+}
+
+impl From<TimeRange> for (NaiveDateTime, NaiveDateTime, bool) {
+    fn from(r: TimeRange) -> Self {
+        (r.start, r.end, r.is_range)
+    }
+}
+
+impl From<(NaiveDateTime, NaiveDateTime, bool)> for TimeRange {
+    fn from((start, end, is_range): (NaiveDateTime, NaiveDateTime, bool)) -> Self {
+        TimeRange {
+            start,
+            end,
+            is_range,
+        }
+    }
+}
+
+/// Converts a time expression into a [`TimeRange`].
 ///
 /// The second parameter is an optional `Config` object. In general you will not need to
 /// use this except in testing or in the interpretation of pay periods.
@@ -597,12 +649,12 @@ pub fn parsable(phrase: &str) -> bool {
 ///
 /// ```rust
 /// # use two_timer::{parse, Config};
-/// let (reference_time, _, _) = parse("5/6/69", None).unwrap();
+/// let range = parse("5/6/69", None).unwrap();
+/// let reference_time = range.start;
+/// // or destructure the old-fashioned way:
+/// let (start, end, is_range) = parse("5/6/69", None).unwrap().into();
 /// ```
-pub fn parse(
-    phrase: &str,
-    config: Option<Config>,
-) -> Result<(NaiveDateTime, NaiveDateTime, bool), TimeError> {
+pub fn parse(phrase: &str, config: Option<Config>) -> Result<TimeRange, TimeError> {
     let parse = if cfg!(feature = "small_grammar") {
         SMALL_MATCHER
             .parse(phrase)
@@ -617,17 +669,17 @@ pub fn parse(
         )));
     };
     if parse.has("universal") {
-        return Ok((first_moment(), last_moment(), false));
+        return Ok(TimeRange::moment(first_moment(), last_moment()));
     }
     let parse = parse.name("particular").expect("grammar guarantees this");
     let config = config.unwrap_or_default();
     if let Some(moment) = parse.name("one_time") {
         let (d1, d2, b) = handle_one_time(moment, &config)?;
         let (d3, d4) = adjust(d1, d2, moment);
-        return Ok(if d1 == d3 { (d1, d2, b) } else { (d3, d4, b) });
+        return Ok(if d1 == d3 { (d1, d2, b) } else { (d3, d4, b) }.into());
     }
     if let Some(two_times) = parse.name("two_times") {
-        return handle_two_times(two_times, &config);
+        return Ok(handle_two_times(two_times, &config)?.into());
     }
     unreachable!()
 }
@@ -734,12 +786,10 @@ impl Config {
             default_to_past: true,
         }
     }
-    /// Returns a copy of the configuration parameters with the "now" moment
-    /// set to the parameter supplied.
-    pub fn now(&self, n: NaiveDateTime) -> Config {
-        let mut c = self.clone();
-        c.now = n;
-        c
+    /// Returns the configuration with the "now" moment set to the parameter supplied.
+    pub fn now(mut self, n: NaiveDateTime) -> Config {
+        self.now = n;
+        self
     }
     // like `now` + `period`, but without the cost of constructing a fresh
     // `Config` (and reading the clock) first
@@ -754,41 +804,37 @@ impl Config {
         c.period = period;
         c
     }
-    /// Returns a copy of the configuration parameters with whether
-    /// Monday is regarded as the first day of the week set to the parameter
-    /// supplied. By default Monday *is* regarded as the first day. If this
-    /// parameter is set to `false`, Sunday will be regarded as the first weekday.
-    pub fn monday_starts_week(&self, monday_starts_week: bool) -> Config {
-        let mut c = self.clone();
-        c.monday_starts_week = monday_starts_week;
-        c
+    /// Returns the configuration with whether Monday is regarded as the first
+    /// day of the week set to the parameter supplied. By default Monday *is*
+    /// regarded as the first day. If this parameter is set to `false`, Sunday
+    /// will be regarded as the first weekday.
+    pub fn monday_starts_week(mut self, monday_starts_week: bool) -> Config {
+        self.monday_starts_week = monday_starts_week;
+        self
     }
-    /// Returns a copy of the configuration parameters with the pay period
-    /// length in days set to the parameter supplied. The default pay period
-    /// length is 7 days.
-    pub fn pay_period_length(&self, pay_period_length: u32) -> Config {
-        let mut c = self.clone();
-        c.pay_period_length = pay_period_length;
-        c
+    /// Returns the configuration with the pay period length in days set to the
+    /// parameter supplied. The default pay period length is 7 days.
+    pub fn pay_period_length(mut self, pay_period_length: u32) -> Config {
+        self.pay_period_length = pay_period_length;
+        self
     }
-    /// Returns a copy of the configuration parameters with the reference start
-    /// date for a pay period set to the parameter supplied. By default this date
-    /// is undefined. Unless it is defined, expressions containing the phrase "pay period"
-    /// or "pp" cannot be interpreted.
-    pub fn pay_period_start(&self, pay_period_start: Option<NaiveDate>) -> Config {
-        let mut c = self.clone();
-        c.pay_period_start = pay_period_start;
-        c
+    /// Returns the configuration with the reference start date for a pay period
+    /// set to the parameter supplied. By default this date is undefined. Unless
+    /// it is defined, expressions containing the phrase "pay period" or "pp"
+    /// cannot be interpreted.
+    pub fn pay_period_start(mut self, pay_period_start: Option<NaiveDate>) -> Config {
+        self.pay_period_start = pay_period_start;
+        self
     }
-    /// Returns a copy of the configuration parameters with the `default_to_past`
-    /// parameter set as specified. This allows the interpretation of relative time expressions
-    /// like "Friday" and "12:00". By default, these expressions are assumed to refer to the
-    /// most recent such interval in the *past*. By setting `default_to_past` to `false`
-    /// the rule changes so they are assumed to refer to the nearest such interval in the future.
-    pub fn default_to_past(&self, default_to_past: bool) -> Config {
-        let mut c = self.clone();
-        c.default_to_past = default_to_past;
-        c
+    /// Returns the configuration with the `default_to_past` parameter set as
+    /// specified. This allows the interpretation of relative time expressions
+    /// like "Friday" and "12:00". By default, these expressions are assumed to
+    /// refer to the most recent such interval in the *past*. By setting
+    /// `default_to_past` to `false` the rule changes so they are assumed to
+    /// refer to the nearest such interval in the future.
+    pub fn default_to_past(mut self, default_to_past: bool) -> Config {
+        self.default_to_past = default_to_past;
+        self
     }
 }
 
@@ -802,6 +848,7 @@ impl Default for Config {
 ///
 /// Every error provides a descriptive string that can be displayed.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum TimeError {
     /// The time expression cannot be parsed by the available grammar.
     Parse(String),
@@ -848,11 +895,7 @@ impl std::fmt::Display for TimeError {
 // for the end time, if the span is less than a day, use the first, otherwise use the second
 // e.g., Monday through Friday at 3 PM should end at 3 PM, but Monday through Friday should end at the end of Friday
 fn pick_terminus(d1: NaiveDateTime, d2: NaiveDateTime, through: bool) -> NaiveDateTime {
-    if through {
-        d2
-    } else {
-        d1
-    }
+    if through { d2 } else { d1 }
 }
 
 /// The moment regarded as the beginning of time.
@@ -910,22 +953,26 @@ fn handle_specific_day(
     }
     let time = times.pop();
     if let Some(adverb) = m.name("adverb") {
-        return Ok(match adverb.as_str().chars().next().expect("empty string") {
-            // now
-            'n' | 'N' => moment_and_time(config, time),
-            't' | 'T' => match adverb.as_str().chars().nth(2).expect("impossible string") {
-                // today
-                'd' | 'D' => moment_and_time(&config.period(Period::Day), time),
-                // tomorrow
-                'm' | 'M' => {
-                    moment_and_time(&config.at(now + TimeDelta::days(1), Period::Day), time)
+        return Ok(
+            match adverb.as_str().chars().next().expect("empty string") {
+                // now
+                'n' | 'N' => moment_and_time(config, time),
+                't' | 'T' => match adverb.as_str().chars().nth(2).expect("impossible string") {
+                    // today
+                    'd' | 'D' => moment_and_time(&config.period(Period::Day), time),
+                    // tomorrow
+                    'm' | 'M' => {
+                        moment_and_time(&config.at(now + TimeDelta::days(1), Period::Day), time)
+                    }
+                    _ => unreachable!(),
+                },
+                // yesterday
+                'y' | 'Y' => {
+                    moment_and_time(&config.at(now - TimeDelta::days(1), Period::Day), time)
                 }
                 _ => unreachable!(),
             },
-            // yesterday
-            'y' | 'Y' => moment_and_time(&config.at(now - TimeDelta::days(1), Period::Day), time),
-            _ => unreachable!(),
-        });
+        );
     }
     if let Some(date) = m.name("date_with_year") {
         if let Some(date) = date.name("n_date") {
@@ -976,7 +1023,8 @@ fn handle_specific_period(
             .name("displacement")
             .unwrap()
             .as_str()
-            .chars().next()
+            .chars()
+            .next()
             .unwrap()
         {
             'w' | 'W' => (TimeDelta::weeks(count), Period::Week),
@@ -990,7 +1038,8 @@ fn handle_specific_period(
             .name("from_now_or_ago")
             .unwrap()
             .as_str()
-            .chars().next()
+            .chars()
+            .next()
             .unwrap()
         {
             'a' | 'A' => config.now - displacement,
@@ -1051,8 +1100,11 @@ fn handle_specific_period(
                 Ok(moment_to_period(d, &Period::Week, config))
             }
             ModifiablePeriod::Weekend => {
-                let (_, d2) =
-                    moment_to_period(config.now, &Period::Week, &config.monday_starts_week(true));
+                let (_, d2) = moment_to_period(
+                    config.now,
+                    &Period::Week,
+                    &config.clone().monday_starts_week(true),
+                );
                 let d2 = match modifier {
                     PeriodModifier::Next => d2 + TimeDelta::days(7),
                     PeriodModifier::Last => d2 - TimeDelta::days(7),
@@ -1095,8 +1147,12 @@ fn handle_specific_period(
                 if config.pay_period_start.is_some() {
                     let (d, _) = moment_to_period(config.now, &Period::Pay, config);
                     let d = match modifier {
-                        PeriodModifier::Next => d + TimeDelta::days(config.pay_period_length as i64),
-                        PeriodModifier::Last => d - TimeDelta::days(config.pay_period_length as i64),
+                        PeriodModifier::Next => {
+                            d + TimeDelta::days(config.pay_period_length as i64)
+                        }
+                        PeriodModifier::Last => {
+                            d - TimeDelta::days(config.pay_period_length as i64)
+                        }
                         PeriodModifier::This => d,
                     };
                     Ok(moment_to_period(d, &Period::Pay, config))
@@ -1234,15 +1290,11 @@ fn relative_moment(
     before: bool, // whether the time found should be before or after the reference time
 ) -> Result<(NaiveDateTime, NaiveDateTime), TimeError> {
     if let Some(a_month_and_a_day) = m.name("a_day_in_month") {
-        return match month_and_a_day(a_month_and_a_day, config, other_time, before) {
-            Ok(d) => Ok(moment_and_time(
-                &config
-                    .now(d.and_hms_opt(0, 0, 0).unwrap())
-                    .period(Period::Day),
-                m.name("time"),
-            )),
-            Err(e) => Err(e),
-        };
+        let d = month_and_a_day(a_month_and_a_day, config, other_time, before)?;
+        return Ok(moment_and_time(
+            &config.at(d.and_hms_opt(0, 0, 0).unwrap(), Period::Day),
+            m.name("time"),
+        ));
     }
     if let Some(day) = m.name("a_day") {
         let wd = weekday(day.as_str());
@@ -1256,9 +1308,7 @@ fn relative_moment(
             d += TimeDelta::days(7);
         }
         return Ok(moment_and_time(
-            &config
-                .now(d.and_hms_opt(0, 0, 0).unwrap())
-                .period(Period::Day),
+            &config.at(d.and_hms_opt(0, 0, 0).unwrap(), Period::Day),
             m.name("time"),
         ));
     }
@@ -1426,11 +1476,7 @@ fn time(m: &Match) -> (u32, u32, u32, bool) {
     }
     let hour = if let Some(hour_24) = m.name("hour_24") {
         let hour = s_to_n(hour_24.name("h24").unwrap().as_str());
-        if hour == 24 {
-            0
-        } else {
-            hour
-        }
+        if hour == 24 { 0 } else { hour }
     } else if let Some(hour_12) = m.name("hour_12") {
         let mut hour = s_to_n(hour_12.name("h12").unwrap().as_str());
         hour = if let Some(am_pm) = m.name("am_pm") {
@@ -1441,11 +1487,7 @@ fn time(m: &Match) -> (u32, u32, u32, bool) {
         } else {
             hour
         };
-        if hour == 24 {
-            0
-        } else {
-            hour
-        }
+        if hour == 24 { 0 } else { hour }
     } else {
         unreachable!()
     };
@@ -1777,7 +1819,8 @@ fn adjust(d1: NaiveDateTime, d2: NaiveDateTime, m: &Match) -> (NaiveDateTime, Na
             .name("unit")
             .unwrap()
             .as_str()
-            .chars().next()
+            .chars()
+            .next()
             .unwrap()
         {
             'w' | 'W' => TimeDelta::weeks(count),

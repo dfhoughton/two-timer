@@ -1,6 +1,6 @@
 [package]
 name = "two_timer"
-version = "2.3.0"
+version = "3.0.0"
 authors = ["dfhoughton <dfhoughton@gmail.com>"]
 description = "parser for English time expressions"
 homepage = "https://github.com/dfhoughton/two-timer"
@@ -9,15 +9,14 @@ documentation = "https://docs.rs/two_timer"
 keywords = ["time", "nlp", "parse"]
 categories = ["date-and-time", "parsing"]
 license = "MIT"
-edition = "2021"
-rust-version = "1.65"
+edition = "2024"
+rust-version = "1.85"
 
 [profile.release]
 panic = "abort"
 
 [dependencies]
-pidgin = "0.4.4"
-lazy_static = "1.4"
+pidgin = "0.6"
 chrono = { version = "0.4.31", default-features = false, features = ["clock"] }
 serde_json = { version = "1", optional = true }
 
